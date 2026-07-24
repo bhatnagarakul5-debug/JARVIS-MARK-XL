@@ -50,7 +50,7 @@ class FloatingHUDOverlay(QWidget):
         layout.setContentsMargins(15, 12, 15, 12)
 
         # Header Label
-        self.title_label = QLabel("J.A.R.V.I.S. MARK XL // SYSTEM TELEMETRY")
+        self.title_label = QLabel("J.A.R.V.I.S. MARK XLI // BONES TELEMETRY")
         self.title_label.setStyleSheet("color: #00d4ff; font-family: 'Segoe UI', Arial; font-weight: bold; font-size: 10px; letter-spacing: 1px;")
 
         # Status Label
@@ -58,7 +58,7 @@ class FloatingHUDOverlay(QWidget):
         self.status_label.setStyleSheet("color: #e0f7fc; font-family: 'Consolas', monospace; font-size: 11px;")
 
         # AI Mode Tag
-        self.mode_label = QLabel("SYSTEM STATE: NOMINAL")
+        self.mode_label = QLabel("MARK XLI SUIT: ONLINE [BONES CORE]")
         self.mode_label.setStyleSheet("color: #00ff88; font-family: 'Segoe UI', Arial; font-weight: bold; font-size: 10px;")
 
         layout.addWidget(self.title_label)

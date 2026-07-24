@@ -68,6 +68,9 @@ from actions.whatsapp_reader import read_whatsapp_messages
 from actions.war_mode import war_mode_control
 from actions.ghost_protocol import ghost_protocol
 from actions.project_autopilot import create_project_workspace
+from core.skills_engine import mark_41_skills_control, skills_engine
+from core.parallel_orchestrator import parallel_orchestrator
+from core.offline_fallback import offline_fallback
 from memory.conversation_log   import log_exchange
 
 
@@ -939,6 +942,18 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "mark_41_control",
+        "description": "J.A.R.V.I.S. Mark XLI (Mark 41 Bones) Core Control. Dynamically reloads/loads python skill modules, checks parallel sub-brain tasks, toggles desktop floating telemetry HUD, or checks offline fallback status.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "reload_skills | list_skills | sub_brain_status | toggle_hud | offline_check"},
+                "skill_name": {"type": "STRING", "description": "Name of skill module to reload"}
+            },
+            "required": []
+        }
+    },
+    {
         "name": "ghost_protocol",
         "description": "Instant Stealth & Privacy Mode. Minimizes all active desktop windows, mutes system audio output, and clears clipboard memory.",
         "parameters": {
@@ -1332,7 +1347,21 @@ class JarvisLive:
 
             elif name == "war_mode":
                 r = await loop.run_in_executor(None, lambda: war_mode_control(parameters=args, player=self.ui))
-                result = r or "War Mode action executed."
+                result = r or "War Mode state updated."
+
+            elif name == "mark_41_control":
+                action = args.get("action", "list_skills")
+                if action in ("toggle_hud", "hud"):
+                    from ui_hud_overlay import launch_hud_overlay
+                    r = await loop.run_in_executor(None, launch_hud_overlay)
+                    result = "Mark XLI Floating HUD Telemetry Launched."
+                elif action == "sub_brain_status":
+                    result = parallel_orchestrator.list_active_tasks()
+                elif action == "offline_check":
+                    result = offline_fallback.execute_offline_command("check")
+                else:
+                    r = await loop.run_in_executor(None, lambda: mark_41_skills_control(parameters=args, player=self.ui))
+                    result = r or "Mark XLI Skills Engine updated."
 
             elif name == "ghost_protocol":
                 r = await loop.run_in_executor(None, lambda: ghost_protocol(parameters=args, player=self.ui))

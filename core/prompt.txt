@@ -90,3 +90,4 @@ TOOL SELECTION:
 - war_mode → when user asks to activate/deactivate War Mode, check War Mode status, or open an app in War Mode (e.g. "activate war mode", "engage war mode", "house party protocol", "open DaVinci in war mode", "deactivate war mode").
 - ghost_protocol → when user asks to activate Ghost Protocol, engage stealth mode, or hide sensitive windows (e.g. "ghost protocol", "activate stealth mode", "hide my windows").
 - project_autopilot → when user asks to create a new project workspace or folder (e.g. "setup a new Python project named AI-App", "create a DaVinci video project", "create web project").
+- mark_41_control → when user asks for Mark 41 Bones suit control, reloading skill modules, checking background sub-brain worker status, or toggling HUD overlay telemetry (e.g. "reload skills", "mark 41 status", "sub brain status", "toggle HUD overlay").
