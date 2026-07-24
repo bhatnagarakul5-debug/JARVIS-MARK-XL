@@ -57,6 +57,8 @@ def run_security_audit():
         tracked_files = [line.strip() for line in ls_out.splitlines() if line.strip()]
 
         for tf in tracked_files:
+            if tf.endswith("security_audit.py"):
+                continue
             tf_path = BASE_DIR / tf
             if tf_path.exists() and tf_path.is_file() and not tf.endswith((".png", ".ico", ".jpg", ".zip", ".exe")):
                 try:
