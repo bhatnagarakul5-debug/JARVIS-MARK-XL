@@ -4,6 +4,6 @@
     "os_system": "windows",
     "email_address": "your_email@gmail.com",
     "email_app_password": "your_app_password",
-    "whatsapp_locked_chats_passcode": "123450",
+    "whatsapp_locked_chats_passcode": "YOUR_PASSCODE_HERE",
     "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 }

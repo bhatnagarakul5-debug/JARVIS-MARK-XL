@@ -202,18 +202,18 @@ TOOL_DECLARATIONS = [
                 "message_text": {"type": "STRING", "description": "The message to send"},
                 "platform":     {"type": "STRING", "description": "Platform: WhatsApp, Telegram, etc."},
                 "is_locked":    {"type": "BOOLEAN", "description": "True if target chat is inside WhatsApp Locked Chats"},
-                "passcode":     {"type": "STRING", "description": "Passcode to unlock locked chats (default: 123450)"}
+                "passcode":     {"type": "STRING", "description": "Passcode to unlock locked chats"}
             },
             "required": ["receiver", "message_text"]
         }
     },
     {
         "name": "unlock_whatsapp_locked_chats",
-        "description": "Unlocks WhatsApp Locked Chats vault using user passcode (default: 123450) and optionally opens a contact chat or sends a reply.",
+        "description": "Unlocks WhatsApp Locked Chats vault using user passcode and optionally opens a contact chat or sends a reply.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "passcode": {"type": "STRING", "description": "Passcode for locked chats vault (default: 123450)"},
+                "passcode": {"type": "STRING", "description": "Passcode for locked chats vault"},
                 "contact":  {"type": "STRING", "description": "Contact name inside locked chats to open/reply"},
                 "message":  {"type": "STRING", "description": "Reply text to send to the contact"}
             },
@@ -912,7 +912,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "whatsapp_reader",
-        "description": "WhatsApp Intelligent Chat & Vault Engine. Opens/unlocks Locked Chats vault (Passcode: 123450), reads unread messages, sends/delivers messages to contacts, and generates AI auto-replies.",
+        "description": "WhatsApp Intelligent Chat & Vault Engine. Opens/unlocks Locked Chats vault, reads unread messages, sends/delivers messages to contacts, and generates AI auto-replies.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -920,7 +920,7 @@ TOOL_DECLARATIONS = [
                 "contact":    {"type": "STRING", "description": "Contact or group name to message/read"},
                 "message":    {"type": "STRING", "description": "Message text to deliver to contact"},
                 "is_locked":  {"type": "BOOLEAN", "description": "Set True if chat is inside locked chats vault (default False)"},
-                "passcode":   {"type": "STRING", "description": "Passcode for locked chats vault (default '123450')"},
+                "passcode":   {"type": "STRING", "description": "Passcode for locked chats vault"},
                 "auto_reply": {"type": "BOOLEAN", "description": "Set True to generate and send AI auto-reply"}
             },
             "required": []
@@ -1130,7 +1130,7 @@ class JarvisLive:
                 result = r or f"Message sent to {args.get('receiver')}."
 
             elif name == "unlock_whatsapp_locked_chats":
-                passcode = args.get("passcode", "123450")
+                passcode = args.get("passcode", "")
                 contact  = args.get("contact", "")
                 message  = args.get("message", "")
                 r = await loop.run_in_executor(None, lambda: unlock_whatsapp_locked_chats(passcode=passcode, contact=contact, message=message))

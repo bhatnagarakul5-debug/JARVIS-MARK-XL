@@ -167,9 +167,9 @@ def _send_generic(platform: str, receiver: str, message: str) -> str:
     except Exception as e:
         return f"{platform} error: {e}"
 
-def unlock_whatsapp_locked_chats(passcode: str = "123450", contact: str = "", message: str = "") -> str:
+def unlock_whatsapp_locked_chats(passcode: str = "", contact: str = "", message: str = "") -> str:
     """
-    Accesses WhatsApp Locked Chats using passcode (default 123450),
+    Accesses WhatsApp Locked Chats using user passcode,
     unlocks the vault, and optionally opens a contact and sends a reply.
     """
     try:
@@ -189,59 +189,42 @@ def unlock_whatsapp_locked_chats(passcode: str = "123450", contact: str = "", me
         pyautogui.press("enter")
         time.sleep(1.0)
 
-        # 2. Enter secret passcode (default: 123450)
+        # 2. Enter secret passcode
         pyautogui.write(passcode, interval=0.08)
         time.sleep(0.5)
         pyautogui.press("enter")
-        time.sleep(1.2)
+        time.sleep(1.0)
 
-        # 3. If contact specified, search inside locked chats
         if contact:
-            pyautogui.hotkey("ctrl", "f")
-            time.sleep(0.4)
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.write(contact, interval=0.04)
-            time.sleep(0.8)
-            pyautogui.press("enter")
-            time.sleep(0.8)
-
-            # 4. If message specified, send reply
+            _search_contact(contact, "WhatsApp")
             if message:
-                pyautogui.write(message, interval=0.03)
-                time.sleep(0.3)
-                pyautogui.press("enter")
-                return f"Successfully unlocked WhatsApp Locked Chats with passcode '{passcode}' and sent reply to {contact}."
+                _type_and_send(message)
+                return f"Unlocked Locked Chats, opened '{contact}', and sent message."
+            return f"Unlocked Locked Chats and opened '{contact}'."
 
-            return f"Successfully unlocked WhatsApp Locked Chats and opened chat with {contact}."
-
-        return f"Successfully unlocked WhatsApp Locked Chats using passcode '{passcode}'."
-
+        return "WhatsApp Locked Chats vault unlocked."
     except Exception as e:
-        return f"Failed to access WhatsApp Locked Chats: {e}"
+        return f"Failed to unlock Locked Chats: {e}"
 
 
-def send_message(
-    parameters: dict,
-    response=None,
-    player=None,
-    session_memory=None
-) -> str:
+def send_message(parameters: dict, player=None) -> str:
     """
+    Universal messaging handler.
     Called from main.py.
 
     parameters:
         receiver     : Contact name to send to
         message_text : The message content
         platform     : whatsapp | instagram | telegram | <any app name>
-        is_locked    : bool (if True, unlocks WhatsApp locked chats using passcode 123450)
-        passcode     : str (passcode for locked chats, default: 123450)
+        is_locked    : bool (if True, unlocks WhatsApp locked chats using user passcode)
+        passcode     : str (passcode for locked chats)
     """
     params       = parameters or {}
     receiver     = params.get("receiver", "").strip()
     message_text = params.get("message_text", "").strip()
     platform     = params.get("platform", "whatsapp").strip().lower()
     is_locked    = params.get("is_locked", False) or "locked" in platform or "locked" in receiver.lower()
-    passcode     = params.get("passcode", "123450")
+    passcode     = params.get("passcode", "")
 
     if is_locked:
         if player:

@@ -35,7 +35,7 @@
 ### 📱 5. Telegram Remote Control & WhatsApp Chat Engine
 - **2-Way Mobile Control**: Text commands or send photos to your Telegram Bot from your phone anytime.
 - **Telegram Face Memory**: Upload photos on Telegram to save and identify face profiles without laptop webcam load.
-- **WhatsApp Chat Vault**: Unlocks Locked Chats vault (Passcode: `123450`), reads unread messages, and sends automated AI replies.
+- **WhatsApp Chat Vault**: Unlocks Locked Chats vault via passcode, reads unread messages, and sends automated AI replies.
 
 ### 🎧 6. AI Voice DJ & DaVinci Resolve Video Editor
 - **Spotify Voice DJ**: Controls playback, volume, and matches curated playlists to your mood (`war_mode`, `coding`, `chill`, `workout`, `focus`).

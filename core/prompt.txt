@@ -74,7 +74,7 @@ TOOL SELECTION:
 - focus_mode → when user asks to start a focus session, pomodoro timer, or check focus status
 - switch_personality → when user asks to change your personality or switch persona (e.g. "switch to Gordon Ramsay mode", "become Yoda", "roast me", "talk like Batman", "cyberpunk mode", "unhinged mode", "The Godfather mode", "pirate mode", "anime mode", "classic JARVIS")
 - camera_control → when user asks to take a photo to remember a face ("remember my face as [Name]", "take a picture to remember me") or identify a person's face. Zero background video streaming.
-- unlock_whatsapp_locked_chats / send_message → when user asks to access, unlock, read, or reply to locked chats in WhatsApp (use passcode 123450).
+- unlock_whatsapp_locked_chats / send_message → when user asks to access, unlock, read, or reply to locked chats in WhatsApp.
 - davinci_control → when user asks to control DaVinci Resolve (e.g. "open DaVinci Resolve", "make a cut", "blade clip", "ripple delete", "add marker", "switch to color page", "switch to edit page", "render video").
 - auto_edit_video → when user asks to edit videos, match reference video color grading/style, or assemble a timeline from a media folder in DaVinci Resolve.
 - audio_device_control → when user asks to switch or route audio output to Bluetooth, Headphones, Audio Jack, or Speakers (e.g. "switch audio to Bluetooth", "connect to XM5 headphones", "route audio to speakers", "list audio devices").
@@ -86,7 +86,7 @@ TOOL SELECTION:
 - voice_macros → when user asks to activate Editing Mode, Coding Mode, or Gaming Mode workstation routines (e.g. "activate Editing Mode", "start Coding Mode", "play my liked playlist").
 - remote_bridge → when user asks to activate or check Telegram Mobile Remote Control Bridge (e.g. "start Telegram remote bridge", "enable phone control").
 - cooldown_protocol → when user asks to engage CPU Thermal Cooldown, conserve power, or throttle background tasks when CPU spikes (e.g. "engage cooldown protocol", "throttle CPU power", "check thermal load").
-- whatsapp_reader → when user asks to read, send, or reply to WhatsApp messages (normal or locked chats vault with passcode 123450), check unread messages, or send a message to a contact (e.g. "message Alex in locked chats saying hello", "read unread WhatsApp messages", "reply to John on WhatsApp").
+- whatsapp_reader → when user asks to read, send, or reply to WhatsApp messages (normal or locked chats vault), check unread messages, or send a message to a contact (e.g. "message Alex in locked chats saying hello", "read unread WhatsApp messages", "reply to John on WhatsApp").
 - war_mode → when user asks to activate/deactivate War Mode, check War Mode status, or open an app in War Mode (e.g. "activate war mode", "engage war mode", "house party protocol", "open DaVinci in war mode", "deactivate war mode").
 - ghost_protocol → when user asks to activate Ghost Protocol, engage stealth mode, or hide sensitive windows (e.g. "ghost protocol", "activate stealth mode", "hide my windows").
 - project_autopilot → when user asks to create a new project workspace or folder (e.g. "setup a new Python project named AI-App", "create a DaVinci video project", "create web project").

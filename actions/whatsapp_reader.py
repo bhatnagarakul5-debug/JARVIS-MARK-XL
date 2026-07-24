@@ -1,6 +1,6 @@
 """
 actions/whatsapp_reader.py — WhatsApp Intelligent Chat Engine & Locked Vault Inspector
-Handles locked chat vault unlocking via search bar passcode (123450), contact search, message delivery, and unread chat inspection.
+Handles locked chat vault unlocking via search bar passcode, contact search, message delivery, and unread chat inspection.
 """
 
 import os
@@ -23,10 +23,10 @@ def _get_passcode() -> str:
     try:
         if CONFIG_PATH.exists():
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f).get("whatsapp_locked_chats_passcode", "123450")
+                return json.load(f).get("whatsapp_locked_chats_passcode", "")
     except Exception:
         pass
-    return "123450"
+    return ""
 
 
 def _get_api_key() -> str:
@@ -65,11 +65,25 @@ def _focus_whatsapp() -> bool:
         return False
 
 
-def unlock_locked_chats(passcode: str = "123450", player=None) -> bool:
+def _search_whatsapp_contact(contact: str) -> bool:
+    """Helper to search for a contact in WhatsApp."""
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
+    pyautogui.hotkey("ctrl", "a")
+    pyautogui.press("backspace")
+    time.sleep(0.2)
+    pyautogui.write(contact, interval=0.03)
+    time.sleep(0.8)
+    pyautogui.press("enter")
+    time.sleep(0.6)
+    return True
+
+
+def unlock_locked_chats(passcode: str = "", player=None) -> bool:
     """
     Unlocks WhatsApp Locked Chats vault based on exact UI interaction:
     1. Ctrl + F to focus Search Bar ('Search or start a new chat')
-    2. Types passcode '123450' in Search Bar
+    2. Types passcode in Search Bar
     3. Clicks / selects the 'Locked chats' option that appears below
     """
     if not _focus_whatsapp():
@@ -87,7 +101,7 @@ def unlock_locked_chats(passcode: str = "123450", player=None) -> bool:
     pyautogui.press("backspace")
     time.sleep(0.2)
 
-    # 2. Type passcode '123450' directly in Search Bar
+    # 2. Type passcode directly in Search Bar
     pyautogui.write(str(actual_code), interval=0.04)
     time.sleep(0.5)
 
@@ -108,7 +122,7 @@ def unlock_locked_chats(passcode: str = "123450", player=None) -> bool:
     return True
 
 
-def send_whatsapp_message(contact: str, message: str, is_locked: bool = False, passcode: str = "123450", player=None) -> str:
+def send_whatsapp_message(contact: str, message: str, is_locked: bool = False, passcode: str = "", player=None) -> str:
     """
     Delivers a WhatsApp message to a contact (handling locked chats vault & normal chats).
     """
@@ -124,38 +138,27 @@ def send_whatsapp_message(contact: str, message: str, is_locked: bool = False, p
 
     time.sleep(0.4)
 
-    # If message is for a locked chat, unlock vault first by putting passcode in search bar
-    if is_locked or "locked" in contact.lower():
-        unlock_locked_chats(passcode=passcode, player=player)
+    if is_locked:
+        if not unlock_locked_chats(passcode=passcode, player=player):
+            return "Could not unlock WhatsApp Locked Chats."
         time.sleep(0.5)
 
-    # Search for contact
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.3)
-    pyautogui.hotkey("ctrl", "a")
-    pyautogui.press("backspace")
-    time.sleep(0.2)
+    # Search for contact inside WhatsApp
+    if not _search_whatsapp_contact(contact):
+        return f"Could not find contact '{contact}' in WhatsApp."
 
-    pyautogui.write(contact, interval=0.03)
-    time.sleep(0.6)
-    pyautogui.press("enter")
-    time.sleep(0.6)
-
-    # Type & deliver message in active chat pane
-    pyperclip.copy(message)
-    time.sleep(0.2)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.3)
-    pyautogui.press("enter") # Deliver message
     time.sleep(0.4)
 
-    result_str = f"Message successfully delivered to '{contact}': \"{message}\""
-    if player and hasattr(player, "write_log"):
-        player.write_log(f"WHATSAPP: Delivered -> {result_str}")
-        if hasattr(player, "push_notification"):
-            player.push_notification(f"WhatsApp Delivered to {contact}", "success")
+    # Paste and send message
+    pyperclip.copy(message)
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.3)
+    pyautogui.press("enter")
 
-    return result_str
+    if player and hasattr(player, "write_log"):
+        player.write_log(f"WHATSAPP: Message delivered to '{contact}'.")
+
+    return f"Message delivered to {contact} on WhatsApp."
 
 
 def read_whatsapp_messages(parameters: dict, player=None) -> str:
@@ -167,7 +170,7 @@ def read_whatsapp_messages(parameters: dict, player=None) -> str:
         contact    : Contact name
         message    : Message text to deliver
         is_locked  : Set True if reading/messaging locked chat
-        passcode   : Vault passcode (default '123450')
+        passcode   : Vault passcode
         auto_reply : Set True for AI auto-reply
     """
     params = parameters or {}
