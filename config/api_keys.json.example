@@ -1,0 +1,9 @@
+{
+    "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE",
+    "openrouter_api_key": "YOUR_OPENROUTER_API_KEY_HERE",
+    "os_system": "windows",
+    "email_address": "your_email@gmail.com",
+    "email_app_password": "your_app_password",
+    "whatsapp_locked_chats_passcode": "123450",
+    "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+}

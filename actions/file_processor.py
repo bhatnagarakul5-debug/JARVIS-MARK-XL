@@ -25,7 +25,8 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 
 def _get_api_key() -> str:
@@ -35,8 +36,25 @@ def _get_api_key() -> str:
 
 
 def _gemini_client():
-    genai.configure(api_key=_get_api_key())
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.Client(api_key=_get_api_key())
+
+
+def _ai_generate(prompt_or_parts) -> str:
+    client = _gemini_client()
+    models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash-exp"]
+    for m in models:
+        for attempt in range(2):
+            try:
+                res = client.models.generate_content(model=m, contents=prompt_or_parts)
+                if res and res.text:
+                    return res.text.strip()
+            except Exception as e:
+                err_s = str(e)
+                if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s:
+                    time.sleep(1.5)
+                    continue
+                break
+    return "AI processing is currently rate-limited by Gemini API free tier. Please retry in a few seconds."
 
 
 def _detect_type(path: Path) -> str:
@@ -100,8 +118,11 @@ def _process_image(path: Path, action: str, params: dict, speak=None) -> str:
             if params.get("instruction"):
                 prompt = params["instruction"]
 
-            response = model.generate_content([prompt, img])
-            result   = response.text.strip()
+            img_bytes = path.read_bytes()
+            ext = path.suffix.lower().lstrip(".")
+            mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+            part_img = types.Part.from_bytes(data=img_bytes, mime_type=mime)
+            result = _ai_generate([prompt, part_img])
 
             if len(result) > 500 and params.get("save", True):
                 out = _output_path(path, "result", ".txt")
@@ -207,9 +228,7 @@ def _process_pdf(path: Path, action: str, params: dict, speak=None) -> str:
             "reformat":       f"Reformat this text cleanly with proper structure:\n\n{text}",
         }
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt_map.get(action, f"Analyze:\n\n{text}"))
-            result   = response.text.strip()
+            result = _ai_generate(prompt_map.get(action, f"Analyze:\n\n{text}"))
             if len(result) > 600 and params.get("save", True):
                 out = _output_path(path, action, ".txt")
                 out.write_text(result, encoding="utf-8")
@@ -297,9 +316,7 @@ def _process_text_doc(path: Path, file_type: str, action: str,
         instruction = action
 
     try:
-        model    = _gemini_client()
-        response = model.generate_content(prompt_map[action])
-        result   = response.text.strip()
+        result = _ai_generate(prompt_map[action])
         if len(result) > 600 and params.get("save", True):
             out = _output_path(path, action, ".txt")
             out.write_text(result, encoding="utf-8")
@@ -344,9 +361,7 @@ def _process_data(path: Path, file_type: str, action: str,
                    f"Rows: {len(df)}\nPreview:\n{preview}\n\n"
                    f"Give insights, patterns, and notable findings.")
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            return _ai_generate(prompt)
         except Exception as e:
             return f"AI analysis failed: {e}"
 
@@ -429,9 +444,7 @@ def _process_json(path: Path, action: str, params: dict, speak=None) -> str:
         if params.get("instruction"):
             prompt = f"{params['instruction']}\n\nJSON data:\n{preview}"
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            return _ai_generate(prompt)
         except Exception as e:
             return f"AI processing failed: {e}"
 
@@ -493,9 +506,7 @@ def _process_code(path: Path, action: str, params: dict, speak=None) -> str:
         prompt = prompt_map[action]
 
     try:
-        model    = _gemini_client()
-        response = model.generate_content(prompt)
-        result   = response.text.strip()
+        result = _ai_generate(prompt)
 
         if action in ("fix", "optimize", "document") and params.get("save", True):
             out = _output_path(path, action)
@@ -527,18 +538,14 @@ def _process_audio(path: Path, action: str, params: dict, speak=None) -> str:
 
     if action == "transcribe":
         try:
-            model   = _gemini_client()
             content = path.read_bytes()
             mime    = {
                 "mp3": "audio/mp3", "wav": "audio/wav",
                 "ogg": "audio/ogg", "m4a": "audio/mp4",
                 "aac": "audio/aac", "flac": "audio/flac",
             }.get(path.suffix.lstrip(".").lower(), "audio/mpeg")
-            response = model.generate_content([
-                "Transcribe all speech in this audio file accurately.",
-                {"mime_type": mime, "data": content}
-            ])
-            result = response.text.strip()
+            part_audio = types.Part.from_bytes(data=content, mime_type=mime)
+            result = _ai_generate(["Transcribe all speech in this audio file accurately.", part_audio])
             if params.get("save", True):
                 out = _output_path(path, "transcript", ".txt")
                 out.write_text(result, encoding="utf-8")
@@ -764,10 +771,8 @@ def _process_pptx(path: Path, action: str, params: dict, speak=None) -> str:
             out.write_text(text, encoding="utf-8")
             return f"Text extracted. Saved: {out.name}"
         try:
-            model    = _gemini_client()
             prompt   = f"{'Summarize' if action == 'summarize' else 'Analyze'} this presentation:\n{text[:30000]}"
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            return _ai_generate(prompt)
         except Exception as e:
             return f"AI processing failed: {e}"
 

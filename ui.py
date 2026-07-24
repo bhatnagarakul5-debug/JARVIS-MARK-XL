@@ -19,7 +19,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QBrush, QColor, QDragEnterEvent, QDropEvent, QFont, QFontDatabase,
-    QKeySequence, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
+    QImage, QKeySequence, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
     QRadialGradient, QShortcut,
 )
 from PyQt6.QtWidgets import (
@@ -39,7 +39,7 @@ API_FILE   = CONFIG_DIR / "api_keys.json"
 
 _DEFAULT_W, _DEFAULT_H = 980, 700
 _MIN_W,     _MIN_H     = 820, 580
-_LEFT_W  = 148
+_LEFT_W  = 168
 _RIGHT_W = 340
 
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
@@ -135,6 +135,42 @@ class _SysMetrics:
                     return sum(vals) / len(vals)
         except Exception:
             pass
+
+        # Intel GPU (Windows) — uses PowerShell + GPU engine counter
+        if _OS == "Windows":
+            try:
+                r = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine | "
+                     "Where-Object { $_.Name -like '*engtype_3D*' } | "
+                     "Measure-Object -Property UtilizationPercentage -Average).Average"],
+                    capture_output=True, text=True, timeout=3,
+                    creationflags=0x08000000  # CREATE_NO_WINDOW
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    val = float(r.stdout.strip())
+                    if 0 <= val <= 100:
+                        return val
+            except Exception:
+                pass
+
+            # Intel GPU fallback — try Get-Counter
+            try:
+                r = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | "
+                     "Where-Object { $_.CookedValue -gt 0 } | "
+                     "Measure-Object -Property CookedValue -Average | "
+                     "Select-Object -ExpandProperty Average"],
+                    capture_output=True, text=True, timeout=3,
+                    creationflags=0x08000000
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    val = float(r.stdout.strip())
+                    if 0 <= val <= 100:
+                        return val
+            except Exception:
+                pass
 
         # AMD (Linux)
         if _OS == "Linux":
@@ -855,6 +891,57 @@ class _DropCanvas(QWidget):
             z.mousePressEvent(e)
 
 
+class CameraPreviewWidget(QWidget):
+    """Futuristic HUD Camera preview widget that displays live OpenCV feed when camera is ON."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(120)
+        self.setMinimumWidth(120)
+        self.pixmap: QPixmap | None = None
+        self.is_on = False
+
+    def update_frame(self, cv_frame):
+        try:
+            import cv2
+            h, w, ch = cv_frame.shape
+            bytes_per_line = ch * w
+            rgb = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2RGB)
+            qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            self.pixmap = QPixmap.fromImage(qimg)
+            self.is_on = True
+            self.update()
+        except Exception:
+            pass
+
+    def set_offline(self):
+        self.is_on = False
+        self.pixmap = None
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+
+        p.setBrush(QBrush(qcol(C.PANEL2)))
+        p.setPen(QPen(qcol(C.BORDER_A if not self.is_on else C.GREEN), 1))
+        p.drawRoundedRect(QRectF(1, 1, W - 2, H - 2), 4, 4)
+
+        if self.is_on and self.pixmap and not self.pixmap.isNull():
+            scaled = self.pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            p.drawPixmap(0, 0, scaled)
+            
+            # HUD Tag
+            p.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            p.setPen(QPen(qcol(C.GREEN)))
+            p.drawText(QRectF(6, 4, W - 12, 14), Qt.AlignmentFlag.AlignLeft, "● LIVE SCAN")
+        else:
+            # Offline State
+            p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            p.setPen(QPen(qcol(C.TEXT_DIM)))
+            p.drawText(QRectF(0, 0, W, H), Qt.AlignmentFlag.AlignCenter, "📷 CAMERA OFFLINE\n[F6 TO TOGGLE]")
+
+
 class SetupOverlay(QWidget):
     done = pyqtSignal(str, str, str)
 
@@ -1009,13 +1096,326 @@ class SetupOverlay(QWidget):
         self.done.emit(key, or_key, self._sel_os)
 
 
+class SettingsOverlay(QWidget):
+    """In-app settings panel for customizing JARVIS without editing code."""
+    settings_changed = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            SettingsOverlay {{
+                background: rgba(0, 6, 10, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 6px;
+            }}
+        """)
+
+        self._settings = self._load()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(6)
+
+        def _lbl(txt, sz=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignCenter):
+            w = QLabel(txt)
+            w.setAlignment(align)
+            w.setFont(QFont("Courier New", sz, QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w.setStyleSheet(f"color: {color}; background: transparent;")
+            return w
+
+        # Header
+        layout.addWidget(_lbl("⚙  JARVIS SETTINGS", 13, True))
+        layout.addWidget(_lbl("Customize your assistant without editing code.", 8, color=C.PRI_DIM))
+        layout.addSpacing(4)
+
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
+        layout.addSpacing(4)
+
+        # Scroll area for settings fields
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{ background: {C.BG}; width: 6px; border: none; }}
+            QScrollBar::handle:vertical {{ background: {C.BORDER_B}; border-radius: 3px; min-height: 16px; }}
+        """)
+        inner = QWidget()
+        inner.setStyleSheet("background: transparent;")
+        inner_lay = QVBoxLayout(inner)
+        inner_lay.setContentsMargins(0, 0, 0, 0)
+        inner_lay.setSpacing(8)
+
+        self._fields = {}
+        field_defs = [
+            ("user_name",         "YOUR NAME",          "text"),
+            ("voice_name",        "JARVIS VOICE",       "text"),
+            ("address_style",     "ADDRESS STYLE",      "text"),
+            ("personality",       "PERSONALITY",         "text"),
+            ("language",          "LANGUAGE",            "text"),
+            ("default_browser",   "DEFAULT BROWSER",    "text"),
+            ("auto_memory",       "AUTO MEMORY",         "toggle"),
+            ("speak_confirmations", "SPEAK CONFIRMATIONS", "toggle"),
+        ]
+
+        for key, label, ftype in field_defs:
+            inner_lay.addWidget(_lbl(label, 7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
+            if ftype == "text":
+                inp = QLineEdit(str(self._settings.get(key, "")))
+                inp.setFont(QFont("Courier New", 9))
+                inp.setFixedHeight(28)
+                inp.setStyleSheet(f"""
+                    QLineEdit {{
+                        background: #000d12; color: {C.TEXT};
+                        border: 1px solid {C.BORDER}; border-radius: 3px; padding: 3px 7px;
+                    }}
+                    QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
+                """)
+                inner_lay.addWidget(inp)
+                self._fields[key] = inp
+            elif ftype == "toggle":
+                btn = QPushButton()
+                val = self._settings.get(key, True)
+                btn.setProperty("toggled", val)
+                btn.setText("ON" if val else "OFF")
+                btn.setFixedHeight(28)
+                btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                self._style_toggle(btn, val)
+                btn.clicked.connect(lambda _, b=btn, k=key: self._flip_toggle(b, k))
+                inner_lay.addWidget(btn)
+                self._fields[key] = btn
+
+        inner_lay.addStretch()
+        scroll.setWidget(inner)
+        layout.addWidget(scroll, stretch=1)
+
+        layout.addSpacing(6)
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep2)
+        layout.addSpacing(4)
+
+        # Save + Close buttons
+        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+
+        save_btn = QPushButton("💾  SAVE")
+        save_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        save_btn.setFixedHeight(32)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.GREEN};
+                border: 1px solid {C.GREEN_D}; border-radius: 3px;
+            }}
+            QPushButton:hover {{ background: #001a0d; border: 1px solid {C.GREEN}; }}
+        """)
+        save_btn.clicked.connect(self._save)
+        btn_row.addWidget(save_btn)
+
+        close_btn = QPushButton("✕  CLOSE")
+        close_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        close_btn.setFixedHeight(32)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.TEXT_DIM};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{ color: {C.RED}; border: 1px solid {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        btn_row.addWidget(close_btn)
+
+        layout.addLayout(btn_row)
+
+    def _style_toggle(self, btn, val):
+        if val:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: #001a0d; color: {C.GREEN};
+                    border: 1px solid {C.GREEN_D}; border-radius: 3px;
+                }}
+            """)
+        else:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: #140006; color: {C.RED};
+                    border: 1px solid {C.RED}; border-radius: 3px;
+                }}
+            """)
+
+    def _flip_toggle(self, btn, key):
+        cur = btn.property("toggled")
+        nv = not cur
+        btn.setProperty("toggled", nv)
+        btn.setText("ON" if nv else "OFF")
+        self._style_toggle(btn, nv)
+
+    def _load(self) -> dict:
+        path = _base_dir() / "config" / "jarvis_settings.json"
+        try:
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {
+            "user_name": "", "voice_name": "Charon", "address_style": "sir",
+            "personality": "professional", "language": "English",
+            "default_browser": "chrome", "auto_memory": True, "speak_confirmations": True,
+        }
+
+    def _save(self):
+        data = dict(self._settings)
+        for key, widget in self._fields.items():
+            if isinstance(widget, QLineEdit):
+                data[key] = widget.text().strip()
+            elif isinstance(widget, QPushButton):
+                data[key] = widget.property("toggled")
+        path = _base_dir() / "config" / "jarvis_settings.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self._settings = data
+        self.settings_changed.emit(data)
+        self.hide()
+
+
+class HistoryOverlay(QWidget):
+    """In-app overlay for viewing and searching conversation history."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            HistoryOverlay {{
+                background: rgba(0, 6, 10, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 6px;
+            }}
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(6)
+
+        def _lbl(txt, sz=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignCenter):
+            w = QLabel(txt)
+            w.setAlignment(align)
+            w.setFont(QFont("Courier New", sz, QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w.setStyleSheet(f"color: {color}; background: transparent;")
+            return w
+
+        layout.addWidget(_lbl("📜  CONVERSATION HISTORY", 12, True))
+        layout.addWidget(_lbl("Search or review past interactions", 8, color=C.PRI_DIM))
+        layout.addSpacing(4)
+
+        # Search bar
+        self._search_in = QLineEdit()
+        self._search_in.setPlaceholderText("Search history...")
+        self._search_in.setFont(QFont("Courier New", 9))
+        self._search_in.setFixedHeight(28)
+        self._search_in.setStyleSheet(f"""
+            QLineEdit {{
+                background: #000d12; color: {C.TEXT};
+                border: 1px solid {C.BORDER}; border-radius: 3px; padding: 3px 7px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
+        """)
+        self._search_in.textChanged.connect(self._do_search)
+        layout.addWidget(self._search_in)
+
+        # Scroll area for entries
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{ background: {C.BG}; width: 6px; border: none; }}
+            QScrollBar::handle:vertical {{ background: {C.BORDER_B}; border-radius: 3px; min-height: 16px; }}
+        """)
+        self._list_widget = QWidget()
+        self._list_widget.setStyleSheet("background: transparent;")
+        self._list_lay = QVBoxLayout(self._list_widget)
+        self._list_lay.setContentsMargins(0, 0, 0, 0)
+        self._list_lay.setSpacing(6)
+        scroll.setWidget(self._list_widget)
+        layout.addWidget(scroll, stretch=1)
+
+        close_btn = QPushButton("✕  CLOSE")
+        close_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        close_btn.setFixedHeight(30)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.TEXT_DIM};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{ color: {C.RED}; border: 1px solid {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        layout.addWidget(close_btn)
+
+        self._load_entries()
+
+    def _load_entries(self, query: str = ""):
+        # Clear existing
+        while self._list_lay.count():
+            child = self._list_lay.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        try:
+            from memory.conversation_log import get_recent, search_history
+            entries = search_history(query) if query else get_recent(25)
+            if not entries:
+                lbl = QLabel("No conversation history found.")
+                lbl.setFont(QFont("Courier New", 8))
+                lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+                self._list_lay.addWidget(lbl)
+                return
+
+            for item in reversed(entries):
+                box = QWidget()
+                box.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER_A}; border-radius: 3px; padding: 4px;")
+                b_lay = QVBoxLayout(box)
+                b_lay.setContentsMargins(6, 4, 6, 4)
+                b_lay.setSpacing(2)
+
+                ts = item.get("timestamp", "").replace("T", " ")[:16]
+                ts_lbl = QLabel(f"⏱ {ts}")
+                ts_lbl.setFont(QFont("Courier New", 7))
+                ts_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+                b_lay.addWidget(ts_lbl)
+
+                u_lbl = QLabel(f"You: {item.get('user', '')}")
+                u_lbl.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                u_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+                u_lbl.setWordWrap(True)
+                b_lay.addWidget(u_lbl)
+
+                j_lbl = QLabel(f"JARVIS: {item.get('jarvis', '')}")
+                j_lbl.setFont(QFont("Courier New", 8))
+                j_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+                j_lbl.setWordWrap(True)
+                b_lay.addWidget(j_lbl)
+
+                self._list_lay.addWidget(box)
+
+        except Exception as e:
+            lbl = QLabel(f"Error loading history: {e}")
+            lbl.setFont(QFont("Courier New", 8))
+            lbl.setStyleSheet(f"color: {C.RED}; background: transparent;")
+            self._list_lay.addWidget(lbl)
+
+    def _do_search(self, text: str):
+        self._load_entries(text.strip())
+
+
 class MainWindow(QMainWindow):
     _log_sig   = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
+    _notif_sig = pyqtSignal(str, str)
+    _cam_frame_sig = pyqtSignal(object)
 
     def __init__(self, face_path: str):
         super().__init__()
-        self.setWindowTitle("J.A.R.V.I.S — MARK XXXIX")
+        self.setWindowTitle("J.A.R.V.I.S — MARK XL")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
 
@@ -1068,8 +1468,12 @@ class MainWindow(QMainWindow):
 
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._notif_sig.connect(self._add_notification)
+        self._cam_frame_sig.connect(self._cam_widget.update_frame)
 
         self._overlay: SetupOverlay | None = None
+        self._settings_overlay: SettingsOverlay | None = None
+        self._history_overlay: HistoryOverlay | None = None
         self._ready = self._check_config()
         if not self._ready:
             self._show_setup()
@@ -1078,6 +1482,26 @@ class MainWindow(QMainWindow):
         sc_mute.activated.connect(self._toggle_mute)
         sc_full = QShortcut(QKeySequence("F11"), self)
         sc_full.activated.connect(self._toggle_fullscreen)
+        sc_cam = QShortcut(QKeySequence("F6"), self)
+        sc_cam.activated.connect(self._toggle_camera)
+
+    def write_log(self, text: str):
+        self._log_sig.emit(text)
+
+    def _toggle_camera(self):
+        try:
+            from actions.camera_system import camera_mgr
+            res = camera_mgr.toggle_camera(player=self)
+            if camera_mgr.is_active:
+                camera_mgr.add_subscriber(lambda frame: self._cam_frame_sig.emit(frame))
+                self._cam_btn.setText("📷  CAMERA ACTIVE  [F6]")
+                self._cam_btn.setStyleSheet(f"background: #00140a; color: {C.GREEN}; border: 1px solid {C.GREEN}; border-radius: 3px;")
+            else:
+                self._cam_btn.setText("📷  CAMERA OFFLINE  [F6]")
+                self._cam_btn.setStyleSheet(f"background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+                self._cam_widget.set_offline()
+        except Exception as e:
+            self.write_log(f"ERR: Camera toggle failed — {e}")
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
@@ -1091,6 +1515,14 @@ class MainWindow(QMainWindow):
             ow, oh = 460, 390
             cw = self.centralWidget()
             self._overlay.setGeometry(
+                (cw.width()  - ow) // 2,
+                (cw.height() - oh) // 2,
+                ow, oh,
+            )
+        if self._settings_overlay and self._settings_overlay.isVisible():
+            ow, oh = 420, 520
+            cw = self.centralWidget()
+            self._settings_overlay.setGeometry(
                 (cw.width()  - ow) // 2,
                 (cw.height() - oh) // 2,
                 ow, oh,
@@ -1160,7 +1592,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("MARK XXXIX", C.PRI_DIM))
+        lay.addWidget(_badge("MARK XL", C.PRI_DIM))
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1247,12 +1679,66 @@ class MainWindow(QMainWindow):
         ip_lay.addWidget(os_lbl)
 
         lay.addWidget(info_panel)
+        lay.addSpacing(4)
+
+        # Dashboard Widgets
+        dash_panel = QWidget()
+        dash_panel.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 4px;")
+        dp_lay = QVBoxLayout(dash_panel)
+        dp_lay.setContentsMargins(6, 5, 6, 5)
+        dp_lay.setSpacing(3)
+
+        d_hdr = QLabel("◈ DASHBOARD")
+        d_hdr.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+        d_hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; border: none;")
+        dp_lay.addWidget(d_hdr)
+
+        self._dash_wx = QLabel("🌤  WX  --")
+        self._dash_wx.setFont(QFont("Courier New", 7))
+        self._dash_wx.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        dp_lay.addWidget(self._dash_wx)
+
+        self._dash_evt = QLabel("📅  EVT --")
+        self._dash_evt.setFont(QFont("Courier New", 7))
+        self._dash_evt.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        dp_lay.addWidget(self._dash_evt)
+
+        self._dash_mail = QLabel("✉  MAIL --")
+        self._dash_mail.setFont(QFont("Courier New", 7))
+        self._dash_mail.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        dp_lay.addWidget(self._dash_mail)
+
+        lay.addWidget(dash_panel)
+        lay.addSpacing(4)
+
+        # Notification Center
+        n_hdr = QLabel("🔔 NOTIFICATIONS")
+        n_hdr.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+        n_hdr.setStyleSheet(f"color: {C.ACC2}; background: transparent; border-bottom: 1px solid {C.BORDER}; padding-bottom: 2px;")
+        lay.addWidget(n_hdr)
+
+        self._notif_scroll = QScrollArea()
+        self._notif_scroll.setWidgetResizable(True)
+        self._notif_scroll.setFixedHeight(90)
+        self._notif_scroll.setStyleSheet(f"""
+            QScrollArea {{ background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QScrollBar:vertical {{ background: {C.BG}; width: 4px; border: none; }}
+            QScrollBar::handle:vertical {{ background: {C.BORDER_B}; border-radius: 2px; }}
+        """)
+        self._notif_inner = QWidget()
+        self._notif_inner.setStyleSheet("background: transparent;")
+        self._notif_lay = QVBoxLayout(self._notif_inner)
+        self._notif_lay.setContentsMargins(4, 3, 4, 3)
+        self._notif_lay.setSpacing(3)
+        self._notif_scroll.setWidget(self._notif_inner)
+        lay.addWidget(self._notif_scroll)
+
         lay.addStretch()
 
         for txt, col in [
             ("AI CORE\nACTIVE",     C.GREEN),
             ("SEC\nCLEARED",        C.PRI),
-            ("PROTOCOL\nXXXVIII",   C.TEXT_DIM),
+            ("PROTOCOL\nMARK XL",   C.TEXT_DIM),
         ]:
             lbl = QLabel(txt)
             lbl.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
@@ -1297,6 +1783,26 @@ class MainWindow(QMainWindow):
         self._file_hint.setWordWrap(True)
         lay.addWidget(self._file_hint)
 
+        lay.addWidget(_sec("CAMERA FEED"))
+        self._cam_widget = CameraPreviewWidget()
+        lay.addWidget(self._cam_widget)
+
+        self._cam_btn = QPushButton("📷  CAMERA OFFLINE  [F6]")
+        self._cam_btn.setFixedHeight(26)
+        self._cam_btn.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+        self._cam_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cam_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.TEXT_MED};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{
+                color: {C.PRI}; border: 1px solid {C.BORDER_B};
+            }}
+        """)
+        self._cam_btn.clicked.connect(self._toggle_camera)
+        lay.addWidget(self._cam_btn)
+
         sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
         sep2.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep2)
@@ -1327,6 +1833,38 @@ class MainWindow(QMainWindow):
         """)
         fs_btn.clicked.connect(self._toggle_fullscreen)
         lay.addWidget(fs_btn)
+
+        hist_btn = QPushButton("📜  HISTORY")
+        hist_btn.setFixedHeight(26)
+        hist_btn.setFont(QFont("Courier New", 7))
+        hist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        hist_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.PRI};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{
+                color: {C.WHITE}; border: 1px solid {C.PRI};
+            }}
+        """)
+        hist_btn.clicked.connect(self._toggle_history)
+        lay.addWidget(hist_btn)
+
+        settings_btn = QPushButton("⚙  SETTINGS")
+        settings_btn.setFixedHeight(26)
+        settings_btn.setFont(QFont("Courier New", 7))
+        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        settings_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.ACC2};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{
+                color: {C.PRI}; border: 1px solid {C.ACC2};
+            }}
+        """)
+        settings_btn.clicked.connect(self._toggle_settings)
+        lay.addWidget(settings_btn)
 
         return w
 
@@ -1372,9 +1910,9 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen"))
+        lay.addWidget(_fl("[F4] Mute  ·  [F6] Camera  ·  [F11] Fullscreen"))
         lay.addStretch()
-        lay.addWidget(_fl("FatihMakes Industries  ·  MARK XXXIX  ·  CLASSIFIED"))
+        lay.addWidget(_fl("Akul Bhatnagar Industries  ·  MARK XL  ·  CLASSIFIED"))
         lay.addStretch()
         lay.addWidget(_fl("© STARK INDUSTRIES", C.PRI_DIM))
         return w
@@ -1448,6 +1986,24 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
+    def _toggle_settings(self):
+        if self._settings_overlay and self._settings_overlay.isVisible():
+            self._settings_overlay.hide()
+            return
+        ov = SettingsOverlay(self.centralWidget())
+        cw = self.centralWidget()
+        ow, oh = 420, 520
+        ov.setGeometry(
+            (cw.width()  - ow) // 2,
+            (cw.height() - oh) // 2,
+            ow, oh,
+        )
+        ov.settings_changed.connect(
+            lambda d: self._log.append_log("SYS: Settings updated.")
+        )
+        ov.show()
+        self._settings_overlay = ov
+
     def _show_setup(self):
         ov = SetupOverlay(self.centralWidget())
         cw = self.centralWidget()
@@ -1479,6 +2035,80 @@ class MainWindow(QMainWindow):
         self._apply_state("LISTENING")
         self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. JARVIS online.")
 
+    def _toggle_history(self):
+        if self._history_overlay and self._history_overlay.isVisible():
+            self._history_overlay.hide()
+            return
+        ov = HistoryOverlay(self.centralWidget())
+        cw = self.centralWidget()
+        ow, oh = 480, 520
+        ov.setGeometry(
+            (cw.width()  - ow) // 2,
+            (cw.height() - oh) // 2,
+            ow, oh,
+        )
+        ov.show()
+        self._history_overlay = ov
+
+    def push_notification(self, msg: str, level: str = "info"):
+        self._notif_sig.emit(msg, level)
+
+    def _add_notification(self, msg: str, level: str):
+        colors = {"info": C.PRI, "warning": C.ACC2, "alert": C.RED, "success": C.GREEN}
+        col = colors.get(level, C.TEXT_MED)
+        lbl = QLabel(f"• {msg}")
+        lbl.setFont(QFont("Courier New", 7))
+        lbl.setStyleSheet(f"color: {col}; background: transparent;")
+        lbl.setWordWrap(True)
+        self._notif_lay.insertWidget(0, lbl)
+
+    def update_dashboard(self, wx: str = None, evt: str = None, mail: str = None):
+        if wx is not None:
+            self._dash_wx.setText(f"🌤  {wx}")
+        if evt is not None:
+            self._dash_evt.setText(f"📅  {evt}")
+    def set_war_theme(self, enabled: bool):
+        if enabled:
+            C.BG        = "#1a0205"
+            C.PANEL     = "#0d0103"
+            C.PANEL2    = "#140205"
+            C.BORDER    = "#660011"
+            C.BORDER_B  = "#99001a"
+            C.BORDER_A  = "#cc0022"
+            C.PRI       = "#ff1a3c"
+            C.PRI_DIM   = "#990d20"
+            C.PRI_GHO   = "#330008"
+            C.ACC       = "#ffb700"
+            C.ACC2      = "#ffea00"
+            C.TEXT      = "#ffb8c6"
+            C.TEXT_DIM  = "#882b3d"
+            C.TEXT_MED  = "#cc445d"
+            C.DARK      = "#0d0103"
+            C.BAR_BG    = "#140205"
+            self._log.append_log("SYS: WAR PROTOCOL ENGAGED. TACTICAL CRIMSON HUD ACTIVE.")
+            self.push_notification("WAR PROTOCOL ENGAGED -- MAXIMUM PERFORMANCE", "alert")
+        else:
+            C.BG        = "#00060a"
+            C.PANEL     = "#010d14"
+            C.PANEL2    = "#010f18"
+            C.BORDER    = "#0d3347"
+            C.BORDER_B  = "#1a5c7a"
+            C.BORDER_A  = "#0f4060"
+            C.PRI       = "#00d4ff"
+            C.PRI_DIM   = "#007a99"
+            C.PRI_GHO   = "#001f2e"
+            C.ACC       = "#ff6b00"
+            C.ACC2      = "#ffcc00"
+            C.TEXT      = "#8ffcff"
+            C.TEXT_DIM  = "#3a8a9a"
+            C.TEXT_MED  = "#5ab8cc"
+            C.DARK      = "#000d14"
+            C.BAR_BG    = "#011520"
+            self._log.append_log("SYS: WAR PROTOCOL DEACTIVATED. STANDBY HUD RESTORED.")
+            self.push_notification("War protocol deactivated -- Standby mode", "info")
+        self.update()
+
+
 class _RootShim:
     def __init__(self, app: QApplication):
         self._app = app
@@ -1495,6 +2125,9 @@ class JarvisUI:
         self._win = MainWindow(face_path)
         self._win.show()
         self.root = _RootShim(self._app)
+
+    def set_war_theme(self, enabled: bool):
+        self._win.set_war_theme(enabled)
 
     @property
     def muted(self) -> bool:
@@ -1523,6 +2156,12 @@ class JarvisUI:
     def write_log(self, text: str):
         self._win._log_sig.emit(text)
 
+    def push_notification(self, msg: str, level: str = "info"):
+        self._win.push_notification(msg, level)
+
+    def update_dashboard(self, wx: str = None, evt: str = None, mail: str = None):
+        self._win.update_dashboard(wx, evt, mail)
+
     def wait_for_api_key(self):
         while not self._win._ready:
             time.sleep(0.1)
@@ -1532,4 +2171,4 @@ class JarvisUI:
 
     def stop_speaking(self):
         if not self.muted:
-            self.set_state("LISTENING")
+            self.set_state("LISTENING")

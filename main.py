@@ -5,6 +5,13 @@ import sys
 import traceback
 from pathlib import Path
 
+# Ensure Windows console handles emoji/Unicode prints without crashing
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
 import sounddevice as sd
 from google import genai
 from google.genai import types
@@ -13,12 +20,13 @@ from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     should_extract_memory, extract_memory
 )
+from core.hardware_optimizer import optimize_hardware
 
 from actions.file_processor import file_processor
 from actions.flight_finder     import flight_finder
 from actions.open_app          import open_app
 from actions.weather_report    import weather_action
-from actions.send_message      import send_message
+from actions.send_message      import send_message, make_call, unlock_whatsapp_locked_chats
 from actions.reminder          import reminder
 from actions.computer_settings import computer_settings
 from actions.screen_processor  import screen_process
@@ -31,6 +39,36 @@ from actions.dev_agent         import dev_agent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
+from actions.self_edit         import self_edit
+from actions.spotify_control   import spotify_control
+from actions.smart_reply       import smart_reply
+
+from actions.email_compose     import email_compose
+from actions.clipboard_manager import clipboard_manager, start_clipboard_monitor
+from actions.scheduler         import schedule_task, start_scheduler
+from actions.tab_manager       import tab_manager
+from actions.daily_briefing    import daily_briefing
+from actions.calendar_manager import calendar_manager
+from actions.document_chat     import document_chat
+from actions.focus_mode        import focus_mode
+from actions.personality_engine import set_personality, get_personality_instruction
+from actions.camera_system     import camera_control, camera_mgr
+from actions.davinci_control    import davinci_control
+from actions.auto_video_editor import auto_edit_video
+from actions.audio_device_manager import audio_device_control, audio_device_mgr
+from actions.news_intel import fetch_news_intel
+from actions.archive_intel import archive_intel
+from actions.system_diagnostics import run_system_diagnostics
+from actions.davinci_advanced import davinci_advanced_control
+from actions.security_shield import security_shield_control
+from actions.voice_macros import execute_voice_macro
+from actions.remote_bridge import remote_bridge_control
+from actions.cooldown_protocol import cooldown_control
+from actions.whatsapp_reader import read_whatsapp_messages
+from actions.war_mode import war_mode_control
+from actions.ghost_protocol import ghost_protocol
+from actions.project_autopilot import create_project_workspace
+from memory.conversation_log   import log_exchange
 
 
 def get_base_dir():
@@ -42,7 +80,7 @@ def get_base_dir():
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -108,6 +146,28 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "email_triage",
+        "description": "Checks the user's email inbox for unread emails and returns a summary.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "Always pass 'read_unread'"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "search_memory",
+        "description": "Searches your Vector Database memory for past facts, preferences, or details you were told.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {"type": "STRING", "description": "Search query like 'What is my favorite food?' or 'details about my side project'"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "web_search",
         "description": "Searches the web for any information.",
         "parameters": {
@@ -134,15 +194,30 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "send_message",
-        "description": "Sends a text message via WhatsApp, Telegram, or other messaging platform.",
+        "description": "Sends a text message via WhatsApp, Telegram, or other messaging platform. Can also unlock WhatsApp locked chats.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "receiver":     {"type": "STRING", "description": "Recipient contact name"},
                 "message_text": {"type": "STRING", "description": "The message to send"},
-                "platform":     {"type": "STRING", "description": "Platform: WhatsApp, Telegram, etc."}
+                "platform":     {"type": "STRING", "description": "Platform: WhatsApp, Telegram, etc."},
+                "is_locked":    {"type": "BOOLEAN", "description": "True if target chat is inside WhatsApp Locked Chats"},
+                "passcode":     {"type": "STRING", "description": "Passcode to unlock locked chats (default: 123450)"}
             },
-            "required": ["receiver", "message_text", "platform"]
+            "required": ["receiver", "message_text"]
+        }
+    },
+    {
+        "name": "unlock_whatsapp_locked_chats",
+        "description": "Unlocks WhatsApp Locked Chats vault using user passcode (default: 123450) and optionally opens a contact chat or sends a reply.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "passcode": {"type": "STRING", "description": "Passcode for locked chats vault (default: 123450)"},
+                "contact":  {"type": "STRING", "description": "Contact name inside locked chats to open/reply"},
+                "message":  {"type": "STRING", "description": "Reply text to send to the contact"}
+            },
+            "required": []
         }
     },
     {
@@ -240,7 +315,7 @@ TOOL_DECLARATIONS = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | largest | disk_usage | organize_desktop | info"},
+                "action":      {"type": "STRING", "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | largest | disk_usage | organize_desktop | info | open"},
                 "path":        {"type": "STRING", "description": "File/folder path or shortcut: desktop, downloads, documents, home"},
                 "destination": {"type": "STRING", "description": "Destination path for move/copy"},
                 "new_name":    {"type": "STRING", "description": "New name for rename"},
@@ -489,7 +564,403 @@ TOOL_DECLARATIONS = [
             "required": ["category", "key", "value"]
         }
     },
+    {
+        "name": "make_call",
+        "description": (
+            "Makes a phone call to a contact via WhatsApp or Phone Link. "
+            "Use this when the user says 'call someone'. "
+            "Default platform is WhatsApp unless specified."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "contact":   {"type": "STRING", "description": "Contact name or phone number"},
+                "platform":  {"type": "STRING", "description": "whatsapp | phone_link | phone (default: whatsapp)"},
+                "call_type": {"type": "STRING", "description": "audio | video (default: audio)"},
+            },
+            "required": ["contact"]
+        }
+    },
+    {
+        "name": "self_edit",
+        "description": (
+            "Reads or edits JARVIS's own source code. Use when the user asks you to "
+            "change your behavior, edit your code, view your files, or modify yourself. "
+            "Always backup before editing. Actions: list, read, edit, rollback."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":      {"type": "STRING", "description": "list | read | edit | rollback"},
+                "file_path":   {"type": "STRING", "description": "Relative path within project (e.g. actions/open_app.py)"},
+                "description": {"type": "STRING", "description": "What change to make (for edit action)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "update_settings",
+        "description": (
+            "Updates JARVIS settings/preferences. Use when user says things like "
+            "'change your voice', 'call me boss', 'switch to dark mode', etc. "
+            "Settings: user_name, voice_name, address_style, personality, language, "
+            "default_browser, auto_memory, speak_confirmations."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "setting": {"type": "STRING", "description": "Setting key to change"},
+                "value":   {"type": "STRING", "description": "New value for the setting"},
+            },
+            "required": ["setting", "value"]
+        }
+    },
+    {
+        "name": "spotify_control",
+        "description": (
+            "Controls Spotify playback (play, pause, next, prev) or searches for a song/artist. "
+            "Use when user wants to listen to music or control currently playing media."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "play | pause | next | prev | search"},
+                "query":  {"type": "STRING", "description": "Song/artist to search for (only for search action)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "smart_reply",
+        "description": (
+            "Reads the screen using computer vision, and drafts & sends a contextual reply to a chat. "
+            "Use when user says 'reply to <contact>', 'look at my screen and reply', etc. "
+            "If a contact is provided, Jarvis will navigate to them first before reading the screen."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "contact": {"type": "STRING", "description": "The contact or group name to switch to (if any)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "email_compose",
+        "description": "Sends a new email or replies to a received email using SMTP/IMAP.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "send (new email) | reply (reply to sender)"},
+                "to":      {"type": "STRING", "description": "Recipient email address"},
+                "subject": {"type": "STRING", "description": "Email subject"},
+                "body":    {"type": "STRING", "description": "Email body content"}
+            },
+            "required": ["action", "body"]
+        }
+    },
+    {
+        "name": "clipboard_manager",
+        "description": "Manages clipboard history: list recent items, get item by index, search items, or clear history.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "list | get | search | clear"},
+                "index":  {"type": "INTEGER", "description": "Index for get action (0 is newest)"},
+                "query":  {"type": "STRING", "description": "Keyword search query"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "scheduler",
+        "description": "Schedules recurring or one-time automated tasks: add, list, remove, pause, resume.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "add | list | remove | pause | resume"},
+                "task_name": {"type": "STRING", "description": "Name for the scheduled task"},
+                "interval":  {"type": "STRING", "description": "Timing interval (e.g. '30m', '1h', 'daily 09:00')"},
+                "command":   {"type": "STRING", "description": "What JARVIS should do or speak when triggered"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "tab_manager",
+        "description": "Manages browser tabs: list active tabs, close tabs by keyword, save tab sessions, restore sessions, switch tabs.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":       {"type": "STRING", "description": "list | close | save | restore | switch"},
+                "query":        {"type": "STRING", "description": "Keyword to match tab title"},
+                "session_name": {"type": "STRING", "description": "Name of saved tab session"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "daily_briefing",
+        "description": "Provides a complete morning/daily briefing including weather, unread emails, top news headlines, and greeting.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "city": {"type": "STRING", "description": "Optional city name for weather (defaults to user's city)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "calendar_manager",
+        "description": "Manages local calendar events: today's schedule, upcoming events, create event, delete event, search events.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":      {"type": "STRING", "description": "today | upcoming | create | delete | search"},
+                "title":       {"type": "STRING", "description": "Event title"},
+                "date":        {"type": "STRING", "description": "Event date (YYYY-MM-DD)"},
+                "time":        {"type": "STRING", "description": "Event time (HH:MM)"},
+                "description": {"type": "STRING", "description": "Event details"},
+                "query":       {"type": "STRING", "description": "Search keyword"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "document_chat",
+        "description": "Interacts with uploaded documents (PDF, DOCX, TXT): load document into RAG, ask questions about document, clear.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "load | ask | clear"},
+                "file_path": {"type": "STRING", "description": "Path to document file to load"},
+                "query":     {"type": "STRING", "description": "Question to ask about the document"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "focus_mode",
+        "description": "Controls Pomodoro focus mode: start timer, stop timer, check remaining time status.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "start | stop | status"},
+                "duration": {"type": "INTEGER", "description": "Duration in minutes (default: 25)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "switch_personality",
+        "description": "Switches JARVIS's active personality mode and voice preset. Presets: classic_jarvis, unhinged, sarcastic, friday, tactical, roast, gordon_ramsay, sherlock, yoda, batman, cyberpunk, godfather, pirate, anime, matrix, gangster.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "mode": {"type": "STRING", "description": "Personality preset mode: classic_jarvis | unhinged | sarcastic | friday | tactical | roast | gordon_ramsay | sherlock | yoda | batman | cyberpunk | godfather | pirate | anime | matrix | gangster"}
+            },
+            "required": ["mode"]
+        }
+    },
+    {
+        "name": "camera_control",
+        "description": "Face Profile Memory module. Upload photos to @AKULJARVIS_BOT on Telegram to save or identify faces. Use list_faces to see remembered profiles.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "list_faces"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "davinci_control",
+        "description": "Controls DaVinci Resolve video editor: launch/focus app, cut/blade clip at playhead, ripple delete, add timeline marker, toggle playback, switch pages (edit, color, deliver/render, fusion, fairlight), start rendering.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "launch | cut | ripple_delete | marker | play | render | page_edit | page_color | page_deliver | page_fusion | page_fairlight | zoom_in | zoom_out | status"},
+                "text":   {"type": "STRING", "description": "Optional marker name or label"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "auto_edit_video",
+        "description": "Automated AI Video Editor & Color Grader for DaVinci Resolve. Imports media clips from specified path, analyzes reference video style & color grading, edits timeline with rhythmic cuts, applies auto color grading, and leaves completed timeline on Edit page for user review (does NOT export).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "media_path":     {"type": "STRING", "description": "Folder or file path where raw media clips are kept"},
+                "reference_path": {"type": "STRING", "description": "Optional reference video file path to match style & color grading"},
+                "style":          {"type": "STRING", "description": "Optional style prompt (e.g. cinematic, vlog, fast-paced)"}
+            },
+            "required": ["media_path"]
+        }
+    },
+    {
+        "name": "audio_device_control",
+        "description": "Lists or switches JARVIS audio output/input devices dynamically. Supports routing audio output to Bluetooth headphones/speakers, 3.5mm Headphone Jack, or System Speakers.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "list | set_output | reset (default: list)"},
+                "device": {"type": "STRING", "description": "Device name, index, or keyword: 'bluetooth', 'headphones', 'speakers', 'jack', 'realtek', etc."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "news_intel",
+        "description": "Global Omni-News Intelligence Engine. Accesses all live global and national news channels (BBC, Reuters, CNN, TechCrunch, Wired, Bloomberg, NDTV, Times of India, NASA) across categories (tech, business, world, india, science, sports).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "top_headlines | search | channel | category | channels_list"},
+                "category": {"type": "STRING", "description": "all | tech | business | world | science | sports | entertainment | india"},
+                "channel":  {"type": "STRING", "description": "bbc | reuters | cnn | techcrunch | wired | bloomberg | ndtv | nasa | etc."},
+                "query":    {"type": "STRING", "description": "Keyword query to search news for (e.g. AI, Stock Market, NVIDIA)"},
+                "limit":    {"type": "INTEGER", "description": "Number of news headlines to return (default 8)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "archive_intel",
+        "description": "Internet Archive & Wayback Machine Deep Search Engine. Finds historical snapshots of any website on the Wayback Machine, or searches millions of books, papers, films, and media in The Internet Archive library.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "wayback | search_archive | fetch_page"},
+                "url":        {"type": "STRING", "description": "Website URL for Wayback Machine snapshot search (e.g. google.com)"},
+                "timestamp":  {"type": "STRING", "description": "Optional year or date for Wayback Machine (e.g. 2015, 20100101)"},
+                "query":      {"type": "STRING", "description": "Search term for Internet Archive library"},
+                "media_type": {"type": "STRING", "description": "Filter: texts | movies | audio | software"},
+                "limit":      {"type": "INTEGER", "description": "Number of items to return (default 5)"}
+            },
+        }
+    },
+    {
+        "name": "system_diagnostics",
+        "description": "Autonomous Deep System Diagnostics & Repair Suite. Monitors CPU load, RAM usage, NVIDIA/OpenCV GPU status, disk space, network latency, and executes auto-repair cache optimization.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "full_scan | repair | gpu | network | subsystems"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "davinci_advanced",
+        "description": "Advanced DaVinci Resolve AI Editor. Performs Beat-Sync cut placement on music BPM, and auto-generates subtitle markers.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "beat_sync | subtitles"},
+                "bpm":      {"type": "INTEGER", "description": "Beats per minute (default 120)"},
+                "language": {"type": "STRING", "description": "Subtitle language"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "security_shield",
+        "description": "Stark Cyber Security Shield. Locks Windows on intruder detection, sends snapshot alerts, and performs local network scans.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "lock | scan_network | intruder_check"},
+                "target": {"type": "STRING", "description": "Target intruder or IP"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "voice_macros",
+        "description": "Executes workstation environment routines (Editing Mode, Coding Mode, Gaming Mode) with Spotify Liked Songs playlist launch.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "macro_name": {"type": "STRING", "description": "editing_mode | coding_mode | gaming_mode"}
+            },
+            "required": ["macro_name"]
+        }
+    },
+    {
+        "name": "remote_bridge",
+        "description": "Activates Telegram Mobile Remote Control & Face Memory Bridge. Enables 2-way AI conversation, remote commands, and photo upload face recognition via @AKULJARVIS_BOT.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "start"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "cooldown_protocol",
+        "description": "Stark CPU Thermal Cooldown & Power Management. Throttles non-essential background tasks and flushes memory when CPU usage spikes.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "status | activate | deactivate | check"},
+                "threshold": {"type": "NUMBER", "description": "CPU percentage threshold (default 85.0)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "whatsapp_reader",
+        "description": "WhatsApp Intelligent Chat & Vault Engine. Opens/unlocks Locked Chats vault (Passcode: 123450), reads unread messages, sends/delivers messages to contacts, and generates AI auto-replies.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "read | send | reply_unread | locked_chats"},
+                "contact":    {"type": "STRING", "description": "Contact or group name to message/read"},
+                "message":    {"type": "STRING", "description": "Message text to deliver to contact"},
+                "is_locked":  {"type": "BOOLEAN", "description": "Set True if chat is inside locked chats vault (default False)"},
+                "passcode":   {"type": "STRING", "description": "Passcode for locked chats vault (default '123450')"},
+                "auto_reply": {"type": "BOOLEAN", "description": "Set True to generate and send AI auto-reply"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "war_mode",
+        "description": "Tactical War Protocol & Battle Mode Engine. Activates/deactivates Crimson Tactical HUD UI theme, locks CPU/GPU performance priority, and deploys applications in War Mode when explicitly requested.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "activate | deactivate | open_app | status"},
+                "app_name": {"type": "STRING", "description": "Name of app to open in War Mode (e.g. davinci, spotify, vscode)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "ghost_protocol",
+        "description": "Instant Stealth & Privacy Mode. Minimizes all active desktop windows, mutes system audio output, and clears clipboard memory.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "project_autopilot",
+        "description": "Stark One-Command Workspace & Project Builder. Creates new project directory structure, starter code/template files (python, davinci, web, cpp), and opens workspace in VS Code.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "project_name": {"type": "STRING", "description": "Name of new project or folder"},
+                "project_type": {"type": "STRING", "description": "python | davinci | web | cpp | general"}
+            },
+            "required": ["project_name"]
+        }
+    },
 ]
+
 
 
 class JarvisLive:
@@ -546,6 +1017,29 @@ class JarvisLive:
         mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
 
+        # Load user settings
+        settings_path = BASE_DIR / "config" / "jarvis_settings.json"
+        voice_name = "Charon"
+        settings_ctx = ""
+        try:
+            if settings_path.exists():
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                voice_name = settings.get("voice_name", "Charon")
+                if not voice_name or voice_name.lower() in ("default", "none"):
+                    voice_name = "Charon"
+                user_name = settings.get("user_name", "")
+                addr = settings.get("address_style", "sir")
+                personality = settings.get("personality", "professional")
+                settings_ctx = (
+                    f"[USER PREFERENCES]\n"
+                    f"User's name: {user_name}\n"
+                    f"Address them as: {addr}\n"
+                    f"Personality mode: {personality}\n"
+                    f"Default browser: {settings.get('default_browser', 'chrome')}\n\n"
+                )
+        except Exception:
+            pass
+
         now      = datetime.now()
         time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
         time_ctx = (
@@ -554,7 +1048,13 @@ class JarvisLive:
             f"Use this to calculate exact times for reminders.\n\n"
         )
 
+        persona_ctx = get_personality_instruction()
+
         parts = [time_ctx]
+        if persona_ctx:
+            parts.append(persona_ctx)
+        if settings_ctx:
+            parts.append(settings_ctx)
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
@@ -569,7 +1069,7 @@ class JarvisLive:
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Charon"
+                        voice_name=voice_name
                     )
                 )
             ),
@@ -602,6 +1102,16 @@ class JarvisLive:
             if name == "open_app":
                 r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
                 result = r or f"Opened {args.get('app_name')}."
+            
+            elif name == "email_triage":
+                from actions.email_triage import email_triage
+                r = await loop.run_in_executor(None, lambda: email_triage(parameters=args, player=self.ui))
+                result = r or "Done checking emails."
+                
+            elif name == "search_memory":
+                from actions.search_memory import search_memory
+                r = await loop.run_in_executor(None, lambda: search_memory(parameters=args, player=self.ui))
+                result = r or "Memory searched."
 
             elif name == "weather_report":
                 r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
@@ -618,6 +1128,13 @@ class JarvisLive:
             elif name == "send_message":
                 r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                 result = r or f"Message sent to {args.get('receiver')}."
+
+            elif name == "unlock_whatsapp_locked_chats":
+                passcode = args.get("passcode", "123450")
+                contact  = args.get("contact", "")
+                message  = args.get("message", "")
+                r = await loop.run_in_executor(None, lambda: unlock_whatsapp_locked_chats(passcode=passcode, contact=contact, message=message))
+                result = r or "WhatsApp Locked Chats unlocked."
 
             elif name == "reminder":
                 r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
@@ -658,8 +1175,14 @@ class JarvisLive:
                 result = r or "Done."
 
             elif name == "dev_agent":
-                r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
+                def _run_dev_agent():
+                    from actions.dev_agent import dev_agent
+                    res = dev_agent(parameters=args, player=self.ui, speak=self.speak)
+                    if hasattr(self, "_sys_alert"):
+                        self._sys_alert(f"Subagent finished building project: {res}")
+                
+                threading.Thread(target=_run_dev_agent, daemon=True).start()
+                result = "Development agent started in the background. I will notify you when it finishes."
 
             elif name == "agent_task":
                 from agent.task_queue import get_queue, TaskPriority
@@ -683,16 +1206,159 @@ class JarvisLive:
             elif name == "flight_finder":
                 r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "make_call":
+                r = await loop.run_in_executor(None, lambda: make_call(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "self_edit":
+                r = await loop.run_in_executor(None, lambda: self_edit(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Done."
+
+            elif name == "spotify_control":
+                r = await loop.run_in_executor(None, lambda: spotify_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "smart_reply":
+                r = await loop.run_in_executor(None, lambda: smart_reply(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "update_settings":
+                setting = args.get("setting", "")
+                value   = args.get("value", "")
+                if setting and value:
+                    settings_path = BASE_DIR / "config" / "jarvis_settings.json"
+                    try:
+                        data = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
+                        if value.lower() in ("true", "on", "yes"): value = True
+                        elif value.lower() in ("false", "off", "no"): value = False
+                        data[setting] = value
+                        settings_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                        result = f"Setting '{setting}' updated to '{value}'."
+                    except Exception as e:
+                        result = f"Failed to update setting: {e}"
+                else:
+                    result = "Please specify both the setting name and value."
+
+            elif name == "email_compose":
+                r = await loop.run_in_executor(None, lambda: email_compose(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "clipboard_manager":
+                r = await loop.run_in_executor(None, lambda: clipboard_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "scheduler":
+                r = await loop.run_in_executor(None, lambda: schedule_task(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Done."
+
+            elif name == "tab_manager":
+                r = await loop.run_in_executor(None, lambda: tab_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "daily_briefing":
+                r = await loop.run_in_executor(None, lambda: daily_briefing(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "calendar_manager":
+                r = await loop.run_in_executor(None, lambda: calendar_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "document_chat":
+                if not args.get("file_path") and self.ui.current_file:
+                    args["file_path"] = self.ui.current_file
+                r = await loop.run_in_executor(None, lambda: document_chat(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "focus_mode":
+                r = await loop.run_in_executor(None, lambda: focus_mode(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Done."
+
+            elif name == "switch_personality":
+                r = await loop.run_in_executor(None, lambda: set_personality(parameters=args, player=self.ui))
+                result = r or "Personality updated."
+
+            elif name == "camera_control":
+                r = await loop.run_in_executor(None, lambda: camera_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "davinci_control":
+                r = await loop.run_in_executor(None, lambda: davinci_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "auto_edit_video":
+                r = await loop.run_in_executor(None, lambda: auto_edit_video(parameters=args, player=self.ui))
+                result = r or "Editing complete."
+
+            elif name == "audio_device_control":
+                r = await loop.run_in_executor(None, lambda: audio_device_control(parameters=args, player=self.ui))
+                result = r or "Audio device updated."
+
+            elif name == "news_intel":
+                r = await loop.run_in_executor(None, lambda: fetch_news_intel(parameters=args, player=self.ui))
+                result = r or "News compiled."
+
+            elif name == "archive_intel":
+                r = await loop.run_in_executor(None, lambda: archive_intel(parameters=args, player=self.ui))
+                result = r or "Archive search complete."
+
+            elif name == "system_diagnostics":
+                r = await loop.run_in_executor(None, lambda: run_system_diagnostics(parameters=args, player=self.ui))
+                result = r or "Diagnostic complete."
+
+            elif name == "davinci_advanced":
+                r = await loop.run_in_executor(None, lambda: davinci_advanced_control(parameters=args, player=self.ui))
+                result = r or "DaVinci advanced action complete."
+
+            elif name == "security_shield":
+                r = await loop.run_in_executor(None, lambda: security_shield_control(parameters=args, player=self.ui))
+                result = r or "Security shield action complete."
+
+            elif name == "voice_macros":
+                r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))
+                result = r or "Voice macro executed."
+
+            elif name == "remote_bridge":
+                r = await loop.run_in_executor(None, lambda: remote_bridge_control(parameters=args, player=self.ui))
+                result = r or "Remote bridge started."
+
+            elif name == "cooldown_protocol":
+                r = await loop.run_in_executor(None, lambda: cooldown_control(parameters=args, player=self.ui))
+                result = r or "Cooldown protocol executed."
+
+            elif name == "whatsapp_reader":
+                r = await loop.run_in_executor(None, lambda: read_whatsapp_messages(parameters=args, player=self.ui))
+                result = r or "WhatsApp messages read."
+
+            elif name == "war_mode":
+                r = await loop.run_in_executor(None, lambda: war_mode_control(parameters=args, player=self.ui))
+                result = r or "War Mode action executed."
+
+            elif name == "ghost_protocol":
+                r = await loop.run_in_executor(None, lambda: ghost_protocol(parameters=args, player=self.ui))
+                result = r or "Ghost protocol engaged."
+
+            elif name == "project_autopilot":
+                r = await loop.run_in_executor(None, lambda: create_project_workspace(parameters=args, player=self.ui))
+                result = r or "Project workspace created."
+
+
             elif name == "shutdown_jarvis":
-                self.ui.write_log("SYS: Shutdown requested.")
-                self.speak("Goodbye, sir.")
+                confirm_code = args.get("confirm_code", "")
+                if confirm_code != "USER_EXPLICIT_SHUTDOWN_CONFIRMED":
+                    result = "Shutdown request rejected — explicit user confirmation required."
+                    self.ui.write_log("SYS: Intercepted and blocked unconfirmed auto-shutdown attempt.")
+                else:
+                    self.ui.write_log("SYS: Shutdown confirmed by user.")
+                    self.speak("Goodbye, sir.")
 
-                def _shutdown():
-                    import time, sys, os
-                    time.sleep(1)
-                    os._exit(0)
+                    def _shutdown():
+                        import time, sys, os
+                        time.sleep(1)
+                        os._exit(0)
 
-                threading.Thread(target=_shutdown, daemon=True).start()
+                    threading.Thread(target=_shutdown, daemon=True).start()
+                    result = "Shutting down JARVIS."
             else:
                 result = f"Unknown tool: {name}"
 
@@ -719,25 +1385,71 @@ class JarvisLive:
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
         loop = asyncio.get_event_loop()
+        
+        porcupine = None
+        try:
+            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+                pk = json.load(f).get("porcupine_key")
+            if pk:
+                import pvporcupine
+                porcupine = pvporcupine.create(access_key=pk, keywords=["jarvis"])
+                print("[JARVIS] 🦔 Wake word active.")
+        except Exception as e:
+            print(f"[JARVIS] 🦔 Wake word inactive: {e}")
+
+        # If porcupine is active, start sleeping. Otherwise, always awake.
+        self._is_woken = False if porcupine else True
+        self._silence_frames = 0
 
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted:
-                data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                
+            data = indata.tobytes()
+            
+            if porcupine and not self.ui.muted and not jarvis_speaking:
+                import struct
+                pcm = struct.unpack_from("h" * (len(data) // 2), data)
+                try:
+                    for i in range(0, len(pcm), porcupine.frame_length):
+                        chunk = pcm[i:i+porcupine.frame_length]
+                        if len(chunk) == porcupine.frame_length:
+                            if porcupine.process(chunk) >= 0:
+                                self._is_woken = True
+                                self._silence_frames = 0
+                                self.ui.write_log("SYS: Wake word detected! Listening...")
+                except Exception:
+                    pass
+
+            if self._is_woken and not jarvis_speaking and not self.ui.muted:
+                try:
+                    loop.call_soon_threadsafe(
+                        self.out_queue.put_nowait,
+                        {"data": data, "mime_type": "audio/pcm"}
+                    )
+                except Exception:
+                    pass  # Queue full — drop frame silently
+                
+                # If we have porcupine, sleep after 10 seconds of streaming
+                if porcupine:
+                    self._silence_frames += frames
+                    if self._silence_frames > SEND_SAMPLE_RATE * 10:  # 10 seconds
+                        self._is_woken = False
+                        self._silence_frames = 0
+                        self.ui.write_log("SYS: Returning to sleep mode.")
 
         try:
-            with sd.InputStream(
-                samplerate=SEND_SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                blocksize=CHUNK_SIZE,
-                callback=callback,
-            ):
+            in_kwargs = {
+                "samplerate": SEND_SAMPLE_RATE,
+                "channels": CHANNELS,
+                "dtype": "int16",
+                "blocksize": CHUNK_SIZE,
+                "callback": callback,
+            }
+            if audio_device_mgr.input_device is not None:
+                in_kwargs["device"] = audio_device_mgr.input_device
+
+            with sd.InputStream(**in_kwargs):
                 print("[JARVIS] 🎤 Mic stream open")
                 while True:
                     await asyncio.sleep(0.1)
@@ -789,6 +1501,11 @@ class JarvisLive:
                                     args=(full_in, full_out),
                                     daemon=True
                                 ).start()
+                                threading.Thread(
+                                    target=log_exchange,
+                                    args=(full_in, full_out),
+                                    daemon=True
+                                ).start()
 
                     if response.tool_call:
                         fn_responses = []
@@ -808,26 +1525,68 @@ class JarvisLive:
     async def _play_audio(self):
         print("[JARVIS] 🔊 Play started")
         loop = asyncio.get_event_loop()
+        current_dev = audio_device_mgr.output_device
 
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-        )
-        stream.start()
+        def _create_stream(dev):
+            kwargs = {
+                "samplerate": RECEIVE_SAMPLE_RATE,
+                "channels": CHANNELS,
+                "dtype": "int16",
+                "blocksize": CHUNK_SIZE,
+            }
+            if dev is not None:
+                kwargs["device"] = dev
+            try:
+                st = sd.RawOutputStream(**kwargs)
+                st.start()
+                return st
+            except Exception as ex:
+                print(f"[JARVIS] ⚠️ Audio device init notice ({dev}): {ex}. Falling back to default playback endpoint...")
+                audio_device_mgr.output_device = None
+                kwargs.pop("device", None)
+                st = sd.RawOutputStream(**kwargs)
+                st.start()
+                return st
+
+        stream = _create_stream(current_dev)
         try:
             while True:
                 chunk = await self.audio_in_queue.get()
                 self.set_speaking(True)
-                await asyncio.to_thread(stream.write, chunk)
+                
+                # Check if user switched audio device dynamically
+                if audio_device_mgr.output_device != current_dev:
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except Exception:
+                        pass
+                    current_dev = audio_device_mgr.output_device
+                    stream = _create_stream(current_dev)
+                    print(f"[JARVIS] 🔊 Output device switched to: {current_dev}")
+
+                try:
+                    await asyncio.to_thread(stream.write, chunk)
+                except Exception as write_err:
+                    print(f"[JARVIS] 🔊 Output write warning: {write_err}. Re-creating default stream...")
+                    audio_device_mgr.output_device = None
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except Exception:
+                        pass
+                    current_dev = None
+                    stream = _create_stream(None)
         except Exception as e:
             print(f"[JARVIS] ❌ Play: {e}")
             raise
         finally:
             self.set_speaking(False)
-            stream.stop()
-            stream.close()
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
 
     async def run(self):
         client = genai.Client(
@@ -854,22 +1613,70 @@ class JarvisLive:
                     self.ui.set_state("LISTENING")
                     self.ui.write_log("SYS: JARVIS online.")
 
+                    # Start system monitor if not running
+                    if not getattr(self, "_monitor_started", False):
+                        from actions.system_monitor import SystemMonitor
+                        def _sys_alert(msg):
+                            self.ui.write_log(msg)
+                            self.ui.push_notification(msg, "warning")
+                            if self.session and self._loop:
+                                asyncio.run_coroutine_threadsafe(self.session.send(input=msg), self._loop)
+                        
+                        self._sys_alert = _sys_alert
+                        self._sys_mon = SystemMonitor(_sys_alert)
+                        self._sys_mon.start()
+                        
+                        # Start clipboard monitor, task scheduler & Telegram Remote Bridge
+                        try:
+                            start_clipboard_monitor()
+                            start_scheduler(self.speak)
+                            remote_bridge_control({"action": "start"}, player=self.ui)
+                        except Exception as e:
+                            print(f"[JARVIS] Monitors startup warning: {e}")
+
+                        # Run startup sequence from config/startup.json
+                        try:
+                            st_path = BASE_DIR / "config" / "startup.json"
+                            if st_path.exists():
+                                st_cfg = json.loads(st_path.read_text(encoding="utf-8"))
+                                greeting = st_cfg.get("greeting")
+                                if greeting:
+                                    self.speak(greeting)
+                                if st_cfg.get("auto_briefing"):
+                                    def _run_briefing():
+                                        b_res = daily_briefing({"city": st_cfg.get("briefing_city", "Delhi")}, player=self.ui)
+                                        self.speak(b_res)
+                                    threading.Thread(target=_run_briefing, daemon=True).start()
+                                for app in st_cfg.get("launch_apps", []):
+                                    open_app({"app_name": app}, response=None, player=self.ui)
+                        except Exception as e:
+                            print(f"[JARVIS] Startup sequence warning: {e}")
+
+                        self._monitor_started = True
+
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
                     
-            except Exception as e:
-                print(f"[JARVIS] ⚠️ {e}")
-                traceback.print_exc()
+            except (Exception, BaseException) as e:
+                err_str = str(e)
+                if any(k in err_str for k in ["1011", "ConnectionClosed", "Internal error", "TaskGroup"]):
+                    print("[JARVIS] 🔄 Gemini Live API WebSocket reset (1011). Reconnecting automatically...")
+                    self.ui.write_log("SYS: Live connection reset. Reconnecting...")
+                else:
+                    print(f"[JARVIS] ⚠️ Live session notice: {e}")
 
             self.set_speaking(False)
             self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
-            await asyncio.sleep(3)
+            print("[JARVIS] 🔄 Reconnecting in 2s...")
+            await asyncio.sleep(2)
 
 def main():
+    reports = optimize_hardware()
     ui = JarvisUI("face.png")
+    for r in reports:
+        ui.write_log(f"HW: {r}")
 
     def runner():
         ui.wait_for_api_key()

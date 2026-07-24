@@ -7,11 +7,32 @@ from datetime import datetime
 import send2trash
 
 def _get_desktop() -> Path:
-    """Returns desktop path — works on Windows, Mac, Linux."""
+    """Returns desktop path — handles OneDrive redirection on Windows."""
+    candidates = [
+        Path.home() / "OneDrive" / "Desktop",
+        Path.home() / "Desktop",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+        return Path(winreg.QueryValueEx(key, "Desktop")[0])
+    except Exception:
+        pass
     return Path.home() / "Desktop"
 
 
 def _get_downloads() -> Path:
+    candidates = [
+        Path.home() / "OneDrive" / "Downloads",
+        Path.home() / "Downloads",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
     return Path.home() / "Downloads"
 
 
@@ -21,10 +42,10 @@ def _resolve_path(raw: str) -> Path:
     Supports shortcuts: 'desktop', 'downloads', 'documents', 'home'
     """
     shortcuts = {
-        "desktop":   Path.home() / "Desktop",
-        "downloads": Path.home() / "Downloads",
-        "documents": Path.home() / "Documents",
-        "pictures":  Path.home() / "Pictures",
+        "desktop":   _get_desktop(),
+        "downloads": _get_downloads(),
+        "documents": Path.home() / "OneDrive" / "Documents" if (Path.home() / "OneDrive" / "Documents").exists() else Path.home() / "Documents",
+        "pictures":  Path.home() / "OneDrive" / "Pictures" if (Path.home() / "OneDrive" / "Pictures").exists() else Path.home() / "Pictures",
         "music":     Path.home() / "Music",
         "videos":    Path.home() / "Videos",
         "home":      Path.home(),
@@ -387,6 +408,29 @@ def get_file_info(path: str) -> str:
     except Exception as e:
         return f"Could not get file info: {e}"
 
+
+def open_file(path: str) -> str:
+    """Opens a file with its default application."""
+    try:
+        import os
+        import platform
+        target = Path(path).expanduser()
+        if not target.exists():
+            return f"File not found: {path}"
+        system = platform.system()
+        if system == "Windows":
+            os.startfile(str(target))
+        elif system == "Darwin":
+            import subprocess as sp
+            sp.Popen(["open", str(target)])
+        else:
+            import subprocess as sp
+            sp.Popen(["xdg-open", str(target)])
+        return f"Opened {target.name} with default application."
+    except Exception as e:
+        return f"Could not open file: {e}"
+
+
 def file_controller(
     parameters: dict,
     response=None,
@@ -469,6 +513,10 @@ def file_controller(
         elif action == "info":
             full = _full_path(path, name)
             result = get_file_info(full)
+
+        elif action == "open":
+            full = _full_path(path, name)
+            result = open_file(full)
 
         else:
             result = f"Unknown action: '{action}'"

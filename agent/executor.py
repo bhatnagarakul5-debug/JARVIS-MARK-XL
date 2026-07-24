@@ -33,9 +33,9 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         speak("Writing custom code for this task, sir.")
 
     home      = Path.home()
-    desktop   = home / "Desktop"
-    downloads = home / "Downloads"
-    documents = home / "Documents"
+    desktop   = home / "OneDrive" / "Desktop" if (home / "OneDrive" / "Desktop").exists() else home / "Desktop"
+    downloads = home / "OneDrive" / "Downloads" if (home / "OneDrive" / "Downloads").exists() else home / "Downloads"
+    documents = home / "OneDrive" / "Documents" if (home / "OneDrive" / "Documents").exists() else home / "Documents"
 
     if not desktop.exists():
         try:

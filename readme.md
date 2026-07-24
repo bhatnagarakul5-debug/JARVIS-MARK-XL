@@ -1,82 +1,86 @@
-# 🤖 MARK XXXIX-OR (39)
-### The Ultimate Cross-Platform Personal AI Assistant — By FatihMakes
+# 🤖 J.A.R.V.I.S. Mark XL — Advanced AI Assistant Suite
 
-> 📺 **[Watch the full setup video on YouTube](https://youtu.be/ldvDNzwnM8k)**
+> **Creator**: Akul Bhatnagar  
+> **Origin**: India | **Established**: 2025  
+> **Core Engine**: Gemini 2.0 / 2.5 Live Real-Time Audio & AI Vision Engine  
 
-A real-time voice AI that can hear, see, understand, and control your computer — on any OS. Supporting Windows, macOS, and Linux. Local execution. Zero subscriptions. Engineered for total autonomy.
-
----
-
-## ✨ Overview
-
-MARK XXXIX-OR represents the pinnacle of the Jarvis series, evolving into a more flexible and robust system. It bridges the gap between the operating system and human intent. Through natural dialogue, Mark 39 analyzes your screen, processes uploaded documents, and executes complex workflows with a brand-new, adaptive interface.
-
-It's not just an assistant — it's an extension of your digital life.
+![JARVIS Banner](face.png)
 
 ---
 
-## 🚀 Capabilities
+## 🌟 Overview
 
-### Core Features
-| Feature | Description |
-|---|---|
-| 🎙️ Real-time Voice | Ultra-low latency conversation in any language |
-| 🖥️ System Control | Launch apps, manage files, execute terminal commands |
-| 🧩 Autonomous Tasks | High-level planning for complex, multi-step goals |
-| 👁️ Visual Awareness | Real-time screen processing and webcam vision |
-| 🧠 Persistent Memory | Deeply remembers your projects, preferences, and personal context |
-| ⌨️ Hybrid Input | Seamlessly switch between keyboard typing and voice commands |
+**J.A.R.V.I.S. Mark XL** is an autonomous, ultra-low latency AI workstation assistant inspired by Tony Stark's iconic AI. Built for Windows with full **Intel UHD GPU OpenCL Hardware Acceleration** and **12-Core CPU Thread Tuning**, JARVIS integrates real-time voice interaction, OS desktop automation, mobile remote control, cyber security safeguards, and multi-app control.
 
 ---
 
-## 🆕 What's New in XXXIX-OR
+## ⚡ Key Features & Tactical Protocols
 
-- 📂 **Advanced File Handling** — New support for direct file uploads. Drop PDFs, source code, or images into the assistant to have them analyzed, summarized, or edited instantly.
-- 🎨 **Adaptive & Flexible UI** — A complete overhaul of the interface. The new UI is fully resizable and responsive, featuring transparency controls and customizable layouts to fit your workspace perfectly.
-- 🐧🍎 **Refined Cross-Platform Stability** — Major fixes for macOS and Linux compatibility. Core system actions are now more consistent across all three major operating systems.
-- ⚡ **Optimized Core Engine** — Significant performance boost in tool-calling logic and response generation, resulting in a 40% faster interaction speed.
-- 🔀 **OpenRouter Integration** — Selected action modules (web search, memory, flight finder, desktop control, and more) now route their LLM calls through OpenRouter's free-tier models. This significantly increases the effective request limit without any additional cost, while Gemini Live continues to handle real-time voice and tool-calling.
+### 🔴 1. War Mode (House Party Protocol)
+- **Visual Transformation**: Instantly switches UI from Iron Man Cyan to **Crimson Red & Ember Gold Tactical HUD**.
+- **Performance Lock**: Pins CPU/GPU performance priority to `HIGH_PRIORITY_CLASS`.
+- **On-Demand App Launching**: Deploys applications under high-performance priority when requested.
+
+### 🛡️ 2. Sentry Mode & Security Shield
+- **Perimeter Defense**: Instant 0.01s Windows Workstation lock (`LockWorkStation`).
+- **Multi-Channel Phone Alerts**: Dispatches automated alert messages directly to your phone via **Telegram (`@AKULJARVIS_BOT`) and WhatsApp**.
+- **Wi-Fi Network Scanner**: Scans local LAN/Wi-Fi for active dynamic IP leases and connected devices.
+
+### 👻 3. Ghost Protocol (Stealth & Privacy)
+- **1-Click Privacy**: Minimizes all active desktop windows (`Win + D`), mutes audio output, and wipes clipboard memory instantly.
+
+### 🛠️ 4. Stark Project Auto-Pilot
+- **Automated Workspace Builder**: Creates structured project directories (`Python`, `DaVinci Video`, `Web`, `C++`), populates starter boilerplate files, and opens workspace in VS Code.
+
+### 📱 5. Telegram Remote Control & WhatsApp Chat Engine
+- **2-Way Mobile Control**: Text commands or send photos to your Telegram Bot from your phone anytime.
+- **Telegram Face Memory**: Upload photos on Telegram to save and identify face profiles without laptop webcam load.
+- **WhatsApp Chat Vault**: Unlocks Locked Chats vault (Passcode: `123450`), reads unread messages, and sends automated AI replies.
+
+### 🎧 6. AI Voice DJ & DaVinci Resolve Video Editor
+- **Spotify Voice DJ**: Controls playback, volume, and matches curated playlists to your mood (`war_mode`, `coding`, `chill`, `workout`, `focus`).
+- **DaVinci Resolve AI Editor**: Performs cuts, marker placements, page switches, beat-sync editing, and auto-color grading.
 
 ---
 
-## ⚡ Quick Start
+## ⚙️ Installation & 1-Click Setup
 
+### 1. Clone Repository
 ```bash
-git clone https://github.com/FatihMakes/Mark-XXXIX-OR.git
-cd Mark-XXXIX-OR
+git clone https://github.com/AkulBhatnagar/Jarvis-Mark-XL.git
+cd Jarvis-Mark-XL
+```
+
+### 2. Install Dependencies
+```bash
 pip install -r requirements.txt
-playwright install
+```
+
+### 3. Configure API Keys
+Copy `config/api_keys.json.example` to `config/api_keys.json` and fill in your keys:
+```json
+{
+    "gemini_api_key": "YOUR_GEMINI_API_KEY",
+    "openrouter_api_key": "YOUR_OPENROUTER_API_KEY",
+    "email_address": "your_email@gmail.com",
+    "email_app_password": "your_app_password",
+    "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN"
+}
+```
+*(Note: If no `api_keys.json` is found on first run, JARVIS opens an interactive Setup Overlay UI for you to enter your keys).*
+
+### 4. Launch JARVIS
+Double-click **`main.bat`** or run:
+```bash
 python main.py
 ```
 
-> ⚠️ **Installation Note:** To keep the repository lightweight, some OS-specific dependencies are not bundled in `requirements.txt`. If you run into a `ModuleNotFoundError`, simply install the missing package via `pip install <module_name>` for your specific system.
+---
+
+## 🔒 Security & Privacy Guarantee
+
+All personal data, API keys, face profile images, and vector memory databases are strictly excluded via `.gitignore` and never committed to GitHub.
 
 ---
 
-## 📋 Requirements
-
-| Requirement | Details |
-|---|---|
-| **OS** | Windows 10/11, macOS, or Linux |
-| **Python** | 3.11 or 3.12 |
-| **Microphone** | Required for voice interaction |
-| **API Keys** | Free Gemini API key + Free OpenRouter API key |
-
----
-
-## ⚠️ License
-
-Personal and non-commercial use only.
-Licensed under **[Creative Commons BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**.
-
----
-
-## 👤 Connect with the Creator
-
-Engineered by a developer building a real-world JARVIS-style assistant.
-⭐ **Star the repository to support the journey to Mark 100.**
-
-| Platform | Link |
-|---|---|
-| YouTube | [@FatihMakes](https://www.youtube.com/@FatihMakes) |
-| Instagram | [@fatihmakes](https://www.instagram.com/fatihmakes) |
+### 🇮🇳 Developed with ❤️ by Akul Bhatnagar (India, 2025)

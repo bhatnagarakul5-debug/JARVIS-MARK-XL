@@ -126,6 +126,33 @@ def _recursive_update(target: dict, updates: dict) -> bool:
     return changed
 
 
+def _get_chroma_collection():
+    try:
+        import chromadb
+        from chromadb import Documents, EmbeddingFunction, Embeddings
+        from google import genai
+        
+        with open(BASE_DIR / "config" / "api_keys.json", "r", encoding="utf-8") as f:
+            api_key = json.load(f)["gemini_api_key"]
+
+        class CustomGeminiEmbeddingFunction(EmbeddingFunction):
+            def __init__(self, key: str):
+                self.client = genai.Client(api_key=key)
+            def __call__(self, input: Documents) -> Embeddings:
+                response = self.client.models.embed_content(
+                    model='gemini-embedding-2',
+                    contents=input
+                )
+                return [e.values for e in response.embeddings]
+                
+        ef = CustomGeminiEmbeddingFunction(key=api_key)
+        client = chromadb.PersistentClient(path=str(BASE_DIR / "memory" / "chroma_db"))
+        collection = client.get_or_create_collection(name="jarvis_memory", embedding_function=ef)
+        return collection
+    except Exception as e:
+        print(f"[Memory] ChromaDB init error: {e}")
+        return None
+
 def update_memory(memory_update: dict) -> dict:
     if not isinstance(memory_update, dict) or not memory_update:
         return load_memory()
@@ -134,6 +161,26 @@ def update_memory(memory_update: dict) -> dict:
     if _recursive_update(memory, memory_update):
         save_memory(memory)
         print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
+        
+        # Add to Vector DB
+        try:
+            coll = _get_chroma_collection()
+            if coll:
+                docs = []
+                ids = []
+                import uuid
+                for cat, items in memory_update.items():
+                    if isinstance(items, dict):
+                        for key, val in items.items():
+                            v = val.get("value") if isinstance(val, dict) else val
+                            docs.append(f"{cat.title()} Fact: {key} is {v}")
+                            ids.append(str(uuid.uuid4()))
+                if docs:
+                    coll.add(documents=docs, ids=ids)
+                    print(f"[Memory] 🧠 Added {len(docs)} facts to Vector DB.")
+        except Exception as e:
+            print(f"[Memory] ⚠️ Vector DB Error: {e}")
+            
     return memory
 
 

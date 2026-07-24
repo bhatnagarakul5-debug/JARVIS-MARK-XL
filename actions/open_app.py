@@ -1,10 +1,11 @@
 # actions/open_app.py
-# MARK XXV — Cross-Platform App Launcher
+# MARK XL — Cross-Platform Universal App Launcher
 
 import time
 import subprocess
 import platform
 import shutil
+from pathlib import Path
 
 try:
     import psutil
@@ -49,6 +50,51 @@ _APP_ALIASES = {
     "capcut":             {"Windows": "CapCut",                 "Darwin": "CapCut",              "Linux": "capcut"},
     "postman":            {"Windows": "Postman",                "Darwin": "Postman",             "Linux": "postman"},
     "figma":              {"Windows": "Figma",                  "Darwin": "Figma",               "Linux": "figma"},
+    "obs":                {"Windows": "OBS Studio",              "Darwin": "OBS",                 "Linux": "obs"},
+    "obs studio":         {"Windows": "OBS Studio",              "Darwin": "OBS",                 "Linux": "obs"},
+    "audacity":           {"Windows": "Audacity",                "Darwin": "Audacity",            "Linux": "audacity"},
+    "git bash":           {"Windows": "git-bash",                "Darwin": "Terminal",            "Linux": "bash"},
+    "android studio":     {"Windows": "Android Studio",          "Darwin": "Android Studio",      "Linux": "android-studio"},
+    "unity":              {"Windows": "Unity Hub",               "Darwin": "Unity Hub",           "Linux": "unityhub"},
+    "unreal engine":      {"Windows": "Unreal Engine",           "Darwin": "Unreal Engine",       "Linux": "unreal"},
+    "teams":              {"Windows": "Microsoft Teams",         "Darwin": "Microsoft Teams",     "Linux": "teams"},
+    "microsoft teams":    {"Windows": "Microsoft Teams",         "Darwin": "Microsoft Teams",     "Linux": "teams"},
+    "skype":              {"Windows": "Skype",                   "Darwin": "Skype",               "Linux": "skype"},
+    "photoshop":          {"Windows": "Adobe Photoshop",         "Darwin": "Adobe Photoshop",     "Linux": "photoshop"},
+    "premiere":           {"Windows": "Adobe Premiere Pro",      "Darwin": "Adobe Premiere Pro",  "Linux": "premiere"},
+    "after effects":      {"Windows": "Adobe After Effects",     "Darwin": "Adobe After Effects", "Linux": "aftereffects"},
+    "illustrator":        {"Windows": "Adobe Illustrator",       "Darwin": "Adobe Illustrator",   "Linux": "illustrator"},
+    "lightroom":          {"Windows": "Adobe Lightroom",         "Darwin": "Adobe Lightroom",     "Linux": "lightroom"},
+    "davinci resolve":    {"Windows": "DaVinci Resolve",         "Darwin": "DaVinci Resolve",     "Linux": "resolve"},
+    "gimp":               {"Windows": "GIMP",                    "Darwin": "GIMP",                "Linux": "gimp"},
+    "inkscape":           {"Windows": "Inkscape",                "Darwin": "Inkscape",            "Linux": "inkscape"},
+    "krita":              {"Windows": "Krita",                   "Darwin": "Krita",               "Linux": "krita"},
+    "libreoffice":        {"Windows": "LibreOffice",             "Darwin": "LibreOffice",         "Linux": "libreoffice"},
+    "onenote":            {"Windows": "OneNote",                 "Darwin": "Microsoft OneNote",   "Linux": "onenote"},
+    "outlook":            {"Windows": "Outlook",                 "Darwin": "Microsoft Outlook",   "Linux": "outlook"},
+    "visual studio":      {"Windows": "Visual Studio",           "Darwin": "Visual Studio",       "Linux": "visualstudio"},
+    "pycharm":            {"Windows": "PyCharm",                 "Darwin": "PyCharm",             "Linux": "pycharm"},
+    "intellij":           {"Windows": "IntelliJ IDEA",           "Darwin": "IntelliJ IDEA",       "Linux": "idea"},
+    "sublime":            {"Windows": "Sublime Text",            "Darwin": "Sublime Text",        "Linux": "subl"},
+    "sublime text":       {"Windows": "Sublime Text",            "Darwin": "Sublime Text",        "Linux": "subl"},
+    "cursor":             {"Windows": "Cursor",                  "Darwin": "Cursor",              "Linux": "cursor"},
+    "windsurf":           {"Windows": "Windsurf",                "Darwin": "Windsurf",            "Linux": "windsurf"},
+    "epic games":         {"Windows": "Epic Games Launcher",     "Darwin": "Epic Games Launcher", "Linux": "epic"},
+    "xbox":               {"Windows": "Xbox",                    "Darwin": "Xbox",                "Linux": "xbox"},
+    "valorant":           {"Windows": "VALORANT",                "Darwin": "VALORANT",            "Linux": "valorant"},
+    "minecraft":          {"Windows": "Minecraft Launcher",      "Darwin": "Minecraft",           "Linux": "minecraft"},
+    "phone link":         {"Windows": "Phone Link",              "Darwin": "Phone Link",          "Linux": "phone-link"},
+    "snipping tool":      {"Windows": "SnippingTool",            "Darwin": "Screenshot",          "Linux": "gnome-screenshot"},
+    "control panel":      {"Windows": "control",                 "Darwin": "System Preferences",  "Linux": "gnome-control-center"},
+    "device manager":     {"Windows": "devmgmt.msc",             "Darwin": "System Information",  "Linux": "lshw"},
+    "task scheduler":     {"Windows": "taskschd.msc",            "Darwin": "crontab",             "Linux": "crontab"},
+    "system info":        {"Windows": "msinfo32",                "Darwin": "system_profiler",     "Linux": "neofetch"},
+    "disk management":    {"Windows": "diskmgmt.msc",            "Darwin": "Disk Utility",        "Linux": "gnome-disks"},
+    "recycle bin":        {"Windows": "shell:RecycleBinFolder",  "Darwin": "Trash",               "Linux": "trash"},
+    "this pc":            {"Windows": "explorer shell:MyComputerFolder", "Darwin": "Finder", "Linux": "nautilus"},
+    "downloads":          {"Windows": "explorer shell:Downloads", "Darwin": "open ~/Downloads", "Linux": "nautilus ~/Downloads"},
+    "tally":              {"Windows": "Tally.ERP 9",             "Darwin": "Tally",               "Linux": "tally"},
+    "tally prime":        {"Windows": "TallyPrime",              "Darwin": "TallyPrime",          "Linux": "tallyprime"},
 }
 
 
@@ -80,7 +126,59 @@ def _is_running(app_name: str) -> bool:
     return False
 
 
+def _try_registry_launch(app_name: str) -> bool:
+    """Try to find and launch an app via Windows Registry."""
+    try:
+        import winreg
+        for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+            try:
+                key = winreg.OpenKey(
+                    root,
+                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\\" + app_name + ".exe"
+                )
+                path = winreg.QueryValue(key, None)
+                if path and Path(path.strip('"')).exists():
+                    subprocess.Popen(
+                        [path.strip('"')],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    time.sleep(1.5)
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def _try_where_launch(app_name: str) -> bool:
+    """Try to find and launch app via 'where' command."""
+    try:
+        result = subprocess.run(
+            ["where", app_name], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            exe = result.stdout.strip().split("\n")[0].strip()
+            subprocess.Popen(
+                [exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            time.sleep(1.5)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _launch_windows(app_name: str) -> bool:
+    # 1. Try Windows Registry
+    if _try_registry_launch(app_name):
+        return True
+
+    # 2. Try 'where' command
+    if _try_where_launch(app_name):
+        return True
+
+    # 3. Try Start Menu search (pyautogui)
     try:
         import pyautogui
         pyautogui.PAUSE = 0.1

@@ -1,0 +1,53 @@
+# =====================================================================
+# J.A.R.V.I.S. Mark XL — Security & Privacy Shield (.gitignore)
+# Creator: Akul Bhatnagar (India, ESTD 2025)
+# ABSOLUTE PRIVACY GUARANTEE: BLOCKS ALL KEYS, MEMORIES, PASSWORDS & PHOTOS
+# =====================================================================
+
+# 1. Sensitive API Keys & Passwords
+config/api_keys.json
+config/jarvis_settings.json
+config/power_optimization.json
+.env
+*.env
+
+# 2. Private Vector Memory, Notes, Reminders & Chat Logs
+memory/chroma_db/
+memory/chroma_db/*
+memory/conversation_log.json
+memory/user_memory.json
+chroma_db/
+
+# 3. User Face Profile Photos & Uploaded Media
+config/known_faces/
+config/known_faces/*
+scratch/
+scratch/*
+
+# 4. Logs, Temporary Files & Diagnostic Scripts
+*.log
+*.tmp
+_audit.py
+_test_*.py
+_list_*.py
+generate_jarvis_logo.py
+
+# 5. OS & Python Caches
+__pycache__/
+actions/__pycache__/
+core/__pycache__/
+memory/__pycache__/
+agent/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 6. Virtual Environments & Local Build Data
+venv/
+env/
+.venv/
+build/
+dist/
+.backups/
+*.egg-info/
+*.lnk

@@ -167,6 +167,59 @@ def _send_generic(platform: str, receiver: str, message: str) -> str:
     except Exception as e:
         return f"{platform} error: {e}"
 
+def unlock_whatsapp_locked_chats(passcode: str = "123450", contact: str = "", message: str = "") -> str:
+    """
+    Accesses WhatsApp Locked Chats using passcode (default 123450),
+    unlocks the vault, and optionally opens a contact and sends a reply.
+    """
+    try:
+        if not _open_app("WhatsApp"):
+            return "Could not open WhatsApp."
+
+        time.sleep(1.5)
+        pyautogui.hotkey("win", "up")
+        time.sleep(0.5)
+
+        # 1. Search for Locked Chats
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.4)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.write("Locked Chats", interval=0.04)
+        time.sleep(0.8)
+        pyautogui.press("enter")
+        time.sleep(1.0)
+
+        # 2. Enter secret passcode (default: 123450)
+        pyautogui.write(passcode, interval=0.08)
+        time.sleep(0.5)
+        pyautogui.press("enter")
+        time.sleep(1.2)
+
+        # 3. If contact specified, search inside locked chats
+        if contact:
+            pyautogui.hotkey("ctrl", "f")
+            time.sleep(0.4)
+            pyautogui.hotkey("ctrl", "a")
+            pyautogui.write(contact, interval=0.04)
+            time.sleep(0.8)
+            pyautogui.press("enter")
+            time.sleep(0.8)
+
+            # 4. If message specified, send reply
+            if message:
+                pyautogui.write(message, interval=0.03)
+                time.sleep(0.3)
+                pyautogui.press("enter")
+                return f"Successfully unlocked WhatsApp Locked Chats with passcode '{passcode}' and sent reply to {contact}."
+
+            return f"Successfully unlocked WhatsApp Locked Chats and opened chat with {contact}."
+
+        return f"Successfully unlocked WhatsApp Locked Chats using passcode '{passcode}'."
+
+    except Exception as e:
+        return f"Failed to access WhatsApp Locked Chats: {e}"
+
+
 def send_message(
     parameters: dict,
     response=None,
@@ -180,12 +233,20 @@ def send_message(
         receiver     : Contact name to send to
         message_text : The message content
         platform     : whatsapp | instagram | telegram | <any app name>
-                       Default: whatsapp
+        is_locked    : bool (if True, unlocks WhatsApp locked chats using passcode 123450)
+        passcode     : str (passcode for locked chats, default: 123450)
     """
     params       = parameters or {}
     receiver     = params.get("receiver", "").strip()
     message_text = params.get("message_text", "").strip()
     platform     = params.get("platform", "whatsapp").strip().lower()
+    is_locked    = params.get("is_locked", False) or "locked" in platform or "locked" in receiver.lower()
+    passcode     = params.get("passcode", "123450")
+
+    if is_locked:
+        if player:
+            player.write_log(f"[msg] Unlocking WhatsApp Locked Chats with PIN '{passcode}'...")
+        return unlock_whatsapp_locked_chats(passcode=passcode, contact=receiver, message=message_text)
 
     if not receiver:
         return "Please specify who to send the message to, sir."
@@ -212,4 +273,127 @@ def send_message(
     if player:
         player.write_log(f"[msg] {result}")
 
+    return result
+
+
+def _call_whatsapp(contact: str, call_type: str = "audio") -> str:
+    """Makes a WhatsApp audio/video call via the Windows desktop app."""
+    try:
+        if not _open_app("WhatsApp"):
+            return "Could not open WhatsApp."
+        time.sleep(2.0)
+
+        # 1. Force maximize the window so coordinates become reliable
+        pyautogui.hotkey("win", "up")
+        time.sleep(0.5)
+
+        # 2. Search for the contact
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.write(contact, interval=0.04)
+        time.sleep(1.5)
+        pyautogui.press("enter")
+        time.sleep(1.5)
+
+        # 3. Try official shortcuts first (covers new and old Windows App versions)
+        if call_type == "video":
+            pyautogui.hotkey("ctrl", "alt", "v")
+            time.sleep(0.3)
+            pyautogui.hotkey("ctrl", "shift", "v")
+        else:
+            pyautogui.hotkey("ctrl", "alt", "c")
+            time.sleep(0.3)
+            pyautogui.hotkey("ctrl", "shift", "c")
+        
+        time.sleep(1.0)
+
+        # 4. Foolproof Fallback: Since window is maximized, we can safely click the top right
+        screen_w, screen_h = pyautogui.size()
+        if call_type == "video":
+            # Video call is usually around 130px from the right edge
+            pyautogui.click(screen_w - 130, 80)
+        else:
+            # Audio call is usually around 180px from the right edge
+            pyautogui.click(screen_w - 180, 80)
+            
+        time.sleep(0.5)
+
+        # Confirm the call if a dialog pops up
+        try:
+            pyautogui.press("enter")
+        except Exception:
+            pass
+
+        return f"{call_type.title()} call started to {contact} via WhatsApp."
+    except Exception as e:
+        return f"WhatsApp call error: {e}"
+
+
+def _call_phone_link(contact: str) -> str:
+    """Makes a phone call via the Phone Link (Your Phone) Windows app."""
+    try:
+        if not _open_app("Phone Link"):
+            return "Could not open Phone Link. Make sure it's set up with your phone."
+        time.sleep(3.5)
+
+        # Try Phone Link dialer shortcut
+        try:
+            pyautogui.hotkey("ctrl", "d")
+            time.sleep(1.0)
+        except Exception:
+            pass
+
+        # Type the contact name or number
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.3)
+        pyautogui.write(contact, interval=0.04)
+        time.sleep(1.0)
+
+        pyautogui.press("enter")
+        time.sleep(0.5)
+        pyautogui.press("enter")
+        time.sleep(0.5)
+
+        return f"Call started to {contact} via Phone Link."
+    except Exception as e:
+        return f"Phone Link call error: {e}"
+
+
+def make_call(
+    parameters: dict,
+    response=None,
+    player=None,
+    session_memory=None
+) -> str:
+    """
+    Makes a call via WhatsApp or Phone Link.
+
+    parameters:
+        contact   : Contact name or phone number
+        platform  : whatsapp | phone_link | phone (default: whatsapp)
+        call_type : audio | video (default: audio)
+    """
+    params    = parameters or {}
+    contact   = params.get("contact", "").strip()
+    platform  = params.get("platform", "whatsapp").strip().lower()
+    call_type = params.get("call_type", "audio").strip().lower()
+
+    if not contact:
+        return "Please specify who to call, sir."
+
+    print(f"[Call] 📞 {platform} → {contact} ({call_type})")
+    if player:
+        player.write_log(f"[call] Calling {contact} via {platform}...")
+
+    if "whatsapp" in platform or "wp" in platform or "wapp" in platform:
+        result = _call_whatsapp(contact, call_type)
+    elif "phone" in platform or "link" in platform:
+        result = _call_phone_link(contact)
+    else:
+        result = _call_whatsapp(contact, call_type)
+
+    print(f"[Call] ✅ {result}")
+    if player:
+        player.write_log(f"[call] {result}")
     return result

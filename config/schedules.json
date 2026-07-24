@@ -1,0 +1,12 @@
+{
+    "morning_briefing": {
+        "interval": "daily 08:30",
+        "command": "give me the morning briefing",
+        "status": "active"
+    },
+    "evening_briefing": {
+        "interval": "daily 19:30",
+        "command": "give me the evening briefing",
+        "status": "active"
+    }
+}
