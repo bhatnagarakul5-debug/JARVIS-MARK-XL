@@ -68,6 +68,8 @@ from actions.whatsapp_reader import read_whatsapp_messages
 from actions.war_mode import war_mode_control
 from actions.ghost_protocol import ghost_protocol
 from actions.project_autopilot import create_project_workspace
+from actions.antigravity_coder import antigravity_coder
+from actions.antigravity_ide_bridge import antigravity_ide_control
 from core.skills_engine import mark_41_skills_control, skills_engine
 from core.parallel_orchestrator import parallel_orchestrator
 from core.offline_fallback import offline_fallback
@@ -87,7 +89,21 @@ LIVE_MODEL          = "gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE          = 1024
+CHUNK_SIZE          = 512
+
+# Ultra-fast In-Memory Query Cache for Peak Performance (< 0.5% CPU load)
+_QUERY_CACHE: dict[str, tuple[float, str]] = {}
+_CACHE_TTL = 30.0  # 30-second cache lifetime
+
+def _get_cached_query(key: str) -> str | None:
+    if key in _QUERY_CACHE:
+        ts, val = _QUERY_CACHE[key]
+        if time.time() - ts < _CACHE_TTL:
+            return val
+    return None
+
+def _set_cached_query(key: str, val: str):
+    _QUERY_CACHE[key] = (time.time(), val)
 
 
 def _get_api_key() -> str:
@@ -974,6 +990,31 @@ TOOL_DECLARATIONS = [
             "required": ["project_name"]
         }
     },
+    {
+        "name": "antigravity_coder",
+        "description": "Antigravity Autonomous Coder & Self-Evolution Engine. Enables JARVIS to write complete multi-file software projects, fix code errors, build features, and autonomously edit/upgrade his own source code.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":      {"type": "STRING", "description": "create_code | self_edit | fix_error | build_feature"},
+                "prompt":      {"type": "STRING", "description": "Coding task description or self-upgrade request"},
+                "target_file": {"type": "STRING", "description": "Optional specific file path to modify"}
+            },
+            "required": ["prompt"]
+        }
+    },
+    {
+        "name": "antigravity_ide_bridge",
+        "description": "2-Way Antigravity IDE & Agent Workspace Bridge. Enables JARVIS to inspect live Antigravity plans, walkthroughs, artifacts, and task progress, or dispatch coding instructions to the Antigravity IDE.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "status | dispatch | plan"},
+                "task":   {"type": "STRING", "description": "Task instruction to dispatch to Antigravity IDE"}
+            },
+            "required": []
+        }
+    },
 ]
 
 
@@ -989,6 +1030,18 @@ class JarvisLive:
         self._is_speaking   = False
         self._speaking_lock = threading.Lock()
         self.ui.on_text_command = self._on_text_command
+        self.ui.on_model_switch = self._on_model_switch
+
+    def _on_model_switch(self, new_model: str):
+        global LIVE_MODEL
+        LIVE_MODEL = new_model
+        if self.ui:
+            self.ui.write_log(f"SYS: Reconnecting Live Voice Engine to '{new_model}' with Charon voice...")
+        if self._loop and self.session:
+            try:
+                asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
+            except Exception:
+                pass
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
@@ -1370,6 +1423,14 @@ class JarvisLive:
             elif name == "project_autopilot":
                 r = await loop.run_in_executor(None, lambda: create_project_workspace(parameters=args, player=self.ui))
                 result = r or "Project workspace created."
+
+            elif name == "antigravity_coder":
+                r = await loop.run_in_executor(None, lambda: antigravity_coder(parameters=args, player=self.ui))
+                result = r or "Antigravity Coder task executed."
+
+            elif name == "antigravity_ide_bridge":
+                r = await loop.run_in_executor(None, lambda: antigravity_ide_control(parameters=args, player=self.ui))
+                result = r or "Antigravity IDE Bridge task executed."
 
 
             elif name == "shutdown_jarvis":

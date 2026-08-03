@@ -1,4 +1,4 @@
-# 🤖 J.A.R.V.I.S. Mark XL — Advanced AI Assistant Suite
+# 🤖 J.A.R.V.I.S. Mark XLI (Bones Core) — Advanced AI Workstation Suite
 
 > **Creator**: Akul Bhatnagar  
 > **Origin**: India | **Established**: 2025  
@@ -10,7 +10,7 @@
 
 ## 🌟 Overview
 
-**J.A.R.V.I.S. Mark XL** is an autonomous, ultra-low latency AI workstation assistant inspired by Tony Stark's iconic AI. Built for Windows with full **Intel UHD GPU OpenCL Hardware Acceleration** and **12-Core CPU Thread Tuning**, JARVIS integrates real-time voice interaction, OS desktop automation, mobile remote control, cyber security safeguards, and multi-app control.
+**J.A.R.V.I.S. Mark XLI (Bones Core)** is an autonomous, ultra-low latency AI workstation assistant inspired by Tony Stark's iconic Mark XLI suit. Built for Windows with full **Intel UHD GPU OpenCL Hardware Acceleration** and **12-Core CPU Thread Tuning**, JARVIS integrates real-time voice interaction, OS desktop automation, mobile remote control, cyber security safeguards, and multi-app control.
 
 ---
 
@@ -47,17 +47,19 @@
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/AkulBhatnagar/Jarvis-Mark-XL.git
-cd Jarvis-Mark-XL
+git clone https://github.com/bhatnagarakul5-debug/JARVIS-MARK-XL.git
+cd JARVIS-MARK-XL
 ```
 
-### 2. Install Dependencies
+### 2. Run Automated Setup (1-Click)
+Double-click **`setup.bat`** (or run in terminal):
 ```bash
-pip install -r requirements.txt
+setup.bat
 ```
+*(This automatically creates a virtual environment, installs all required packages without PATH errors, and sets up your configuration files).*
 
 ### 3. Configure API Keys
-Copy `config/api_keys.json.example` to `config/api_keys.json` and fill in your keys:
+Add your Gemini API key in `config/api_keys.json`:
 ```json
 {
     "gemini_api_key": "YOUR_GEMINI_API_KEY",
@@ -72,7 +74,7 @@ Copy `config/api_keys.json.example` to `config/api_keys.json` and fill in your k
 ### 4. Launch JARVIS
 Double-click **`main.bat`** or run:
 ```bash
-python main.py
+main.bat
 ```
 
 ---

@@ -40,6 +40,16 @@ def _gemini_client():
 
 
 def _ai_generate(prompt_or_parts) -> str:
+    # 1. Try local OmniRoute proxy if text prompt
+    if isinstance(prompt_or_parts, str):
+        try:
+            from core.omniroute_client import omniroute_client
+            omni_res = omniroute_client.generate_text_fallback(prompt_or_parts)
+            if omni_res:
+                return omni_res
+        except Exception:
+            pass
+
     client = _gemini_client()
     models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash-exp"]
     for m in models:

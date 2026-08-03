@@ -46,27 +46,27 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#00060a"
-    PANEL     = "#010d14"
-    PANEL2    = "#010f18"
-    BORDER    = "#0d3347"
-    BORDER_B  = "#1a5c7a"
-    BORDER_A  = "#0f4060"
-    PRI       = "#00d4ff"
-    PRI_DIM   = "#007a99"
-    PRI_GHO   = "#001f2e"
-    ACC       = "#ff6b00"
+    BG        = "#040b14"
+    PANEL     = "#09172a"
+    PANEL2    = "#0e2038"
+    BORDER    = "#00d4ff"
+    BORDER_B  = "#00f0ff"
+    BORDER_A  = "#0088b3"
+    PRI       = "#00f0ff"
+    PRI_DIM   = "#0088aa"
+    PRI_GHO   = "#06283d"
+    ACC       = "#ff6600"
     ACC2      = "#ffcc00"
-    GREEN     = "#00ff88"
-    GREEN_D   = "#00aa55"
-    RED       = "#ff3355"
+    GREEN     = "#00ffaa"
+    GREEN_D   = "#00bb77"
+    RED       = "#ff0055"
     MUTED_C   = "#ff3366"
-    TEXT      = "#8ffcff"
-    TEXT_DIM  = "#3a8a9a"
-    TEXT_MED  = "#5ab8cc"
-    WHITE     = "#d8f8ff"
-    DARK      = "#000d14"
-    BAR_BG    = "#011520"
+    TEXT      = "#e0f8ff"
+    TEXT_DIM  = "#5aa8c0"
+    TEXT_MED  = "#80d8ec"
+    WHITE     = "#ffffff"
+    DARK      = "#050f1e"
+    BAR_BG    = "#081628"
 
 
 def qcol(h: str, a: int = 255) -> QColor:
@@ -521,20 +521,35 @@ class HudCanvas(QWidget):
         p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         p.drawText(QRectF(0, sy, W, 26), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # waveform
-        wy = sy + 30
-        N, bw = 36, 8
+        # 32-Bar High-Definition Glass Equalizer Visualizer
+        wy = sy + 32
+        N, bw = 32, 9
         wx0 = (W - N * bw) / 2
+        
         for i in range(N):
             if self.muted:
-                hgt, cl = 2, qcol(C.MUTED_C)
+                hgt, cl = 3, qcol(C.RED)
             elif self.speaking:
-                hgt = random.randint(3, 20)
-                cl  = qcol(C.PRI) if hgt > 12 else qcol(C.PRI_DIM)
+                hgt = random.randint(4, 28)
+                cl  = qcol(C.PRI) if hgt > 16 else qcol(C.GREEN)
+            elif self.state == "THINKING":
+                hgt = int(8 + 6 * math.sin(self._tick * 0.15 + i * 0.4))
+                cl  = qcol(C.ACC2)
             else:
-                hgt = int(3 + 2 * math.sin(self._tick * 0.09 + i * 0.6))
+                hgt = int(4 + 4 * math.sin(self._tick * 0.08 + i * 0.5))
                 cl  = qcol(C.BORDER_B)
-            p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
+
+            # Glass Bar Fill
+            bar_rect = QRectF(wx0 + i * bw, wy + 30 - hgt, bw - 2, hgt)
+            p.setBrush(QBrush(cl))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(bar_rect, 2, 2)
+
+            # Glowing Peak Indicator Dot
+            if hgt > 8:
+                peak_y = wy + 30 - hgt - 3
+                p.setBrush(QBrush(qcol(C.WHITE if self.speaking else C.PRI)))
+                p.drawEllipse(QPointF(wx0 + i * bw + (bw - 2) / 2, peak_y), 1.5, 1.5)
 
 class MetricBar(QWidget):
 
@@ -557,9 +572,9 @@ class MetricBar(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
 
-        p.setBrush(QBrush(qcol(C.PANEL2)))
-        p.setPen(QPen(qcol(C.BORDER_A), 1))
-        p.drawRoundedRect(QRectF(1, 1, W - 2, H - 2), 4, 4)
+        p.setBrush(QBrush(qcol(C.PANEL2, 220)))
+        p.setPen(QPen(qcol(C.BORDER_B, 220), 1.2))
+        p.drawRoundedRect(QRectF(1, 1, W - 2, H - 2), 6, 6)
 
         bar_h   = 4
         bar_y   = H - bar_h - 5
@@ -599,10 +614,10 @@ class LogWidget(QTextEdit):
         self.setFont(QFont("Courier New", 9))
         self.setStyleSheet(f"""
             QTextEdit {{
-                background: {C.PANEL};
+                background: {C.PANEL2};
                 color: {C.TEXT};
-                border: 1px solid {C.BORDER};
-                border-radius: 4px;
+                border: 1.5px solid {C.BORDER_B};
+                border-radius: 6px;
                 padding: 6px;
                 selection-background-color: {C.PRI_GHO};
             }}
@@ -612,7 +627,7 @@ class LogWidget(QTextEdit):
                 border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: {C.BORDER_B};
+                background: {C.PRI};
                 border-radius: 4px;
                 min-height: 20px;
             }}
@@ -1412,10 +1427,11 @@ class MainWindow(QMainWindow):
     _state_sig = pyqtSignal(str)
     _notif_sig = pyqtSignal(str, str)
     _cam_frame_sig = pyqtSignal(object)
+    _model_sig = pyqtSignal(str)
 
     def __init__(self, face_path: str):
         super().__init__()
-        self.setWindowTitle("J.A.R.V.I.S — MARK XL")
+        self.setWindowTitle("J.A.R.V.I.S — MARK XLI (BONES)")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
 
@@ -1426,6 +1442,7 @@ class MainWindow(QMainWindow):
         )
 
         self.on_text_command  = None
+        self.on_model_switch  = None
         self._muted           = False
         self._current_file: str | None = None
 
@@ -1487,6 +1504,28 @@ class MainWindow(QMainWindow):
 
     def write_log(self, text: str):
         self._log_sig.emit(text)
+
+    def _on_model_click(self, model_key: str):
+        for k, btn in getattr(self, "_btn_models", {}).items():
+            if k == model_key:
+                btn.setStyleSheet(f"background: #002233; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                btn.setStyleSheet(f"background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+        
+        self.write_log(f"UI: 🧠 Switched AI Brain Model to '{model_key}'.")
+        if callable(self.on_model_switch):
+            try:
+                self.on_model_switch(model_key)
+            except Exception as e:
+                self.write_log(f"ERR: Model switch callback failed: {e}")
+
+    def _send_text_cmd(self, text: str):
+        self.write_log(f"You: {text}")
+        if callable(self.on_text_command):
+            try:
+                self.on_text_command(text)
+            except Exception as e:
+                self.write_log(f"ERR: Text command dispatch failed: {e}")
 
     def _toggle_camera(self):
         try:
@@ -1592,7 +1631,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("MARK XL", C.PRI_DIM))
+        lay.addWidget(_badge("MARK XLI // BONES", C.PRI))
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1681,6 +1720,42 @@ class MainWindow(QMainWindow):
         lay.addWidget(info_panel)
         lay.addSpacing(4)
 
+        # Tactical Quick Action Bar
+        t_hdr = QLabel("◈ QUICK PROTOCOLS")
+        t_hdr.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+        t_hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; border-bottom: 1px solid {C.BORDER}; padding-bottom: 2px;")
+        lay.addWidget(t_hdr)
+
+        btn_grid = QVBoxLayout()
+        btn_grid.setSpacing(3)
+
+        tactical_cmds = [
+            ("🛡️ SENTRY",    "sentry mode"),
+            ("👻 GHOST",     "ghost protocol"),
+            ("🛠️ AUTOPILOT", "setup new project"),
+            ("☀️ BRIEFING",  "daily briefing")
+        ]
+
+        for label, cmd_text in tactical_cmds:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            btn.setFixedHeight(22)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C.PANEL2}; color: {C.TEXT_MED};
+                    border: 1px solid {C.BORDER_A}; border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    color: {C.PRI}; border: 1.5px solid {C.PRI}; background: #06283d;
+                }}
+            """)
+            btn.clicked.connect(lambda _, t=cmd_text: self._send_text_cmd(t))
+            btn_grid.addWidget(btn)
+
+        lay.addLayout(btn_grid)
+        lay.addSpacing(4)
+
         # Dashboard Widgets
         dash_panel = QWidget()
         dash_panel.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 4px;")
@@ -1764,6 +1839,42 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             return l
 
+        lay.addWidget(_sec("BRAIN ENGINE SELECTOR"))
+
+        # Model Selector Bar
+        model_panel = QWidget()
+        model_panel.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 4px; padding: 2px;")
+        mp_lay = QHBoxLayout(model_panel)
+        mp_lay.setContentsMargins(4, 4, 4, 4)
+        mp_lay.setSpacing(4)
+
+        self._btn_models = {}
+        models_info = [
+            ("2.5 Flash", "gemini-2.5-flash-native-audio-latest"),
+            ("2.5 Pro",   "gemini-2.5-pro"),
+            ("2.0 Lite",  "gemini-2.0-flash-lite"),
+            ("Omni",      "omniroute")
+        ]
+
+        for label, m_key in models_info:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            btn.setFixedHeight(22)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            
+            # Default active state for 2.5 Flash
+            if m_key == "gemini-2.5-flash-native-audio-latest":
+                btn.setStyleSheet(f"background: #002233; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                btn.setStyleSheet(f"background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+            
+            btn.clicked.connect(lambda _, k=m_key: self._on_model_click(k))
+            mp_lay.addWidget(btn)
+            self._btn_models[m_key] = btn
+
+        lay.addWidget(model_panel)
+        lay.addSpacing(2)
+
         lay.addWidget(_sec("ACTIVITY LOG"))
         self._log = LogWidget()
         lay.addWidget(self._log, stretch=1)
@@ -1771,6 +1882,42 @@ class MainWindow(QMainWindow):
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
+
+        # Spotify AI DJ Media Glass Card
+        lay.addWidget(_sec("SPOTIFY AI DJ CONTROLLER"))
+        spot_card = QWidget()
+        spot_card.setStyleSheet(f"background: {C.PANEL2}; border: 1.5px solid {C.BORDER_B}; border-radius: 6px; padding: 4px;")
+        sp_lay = QHBoxLayout(spot_card)
+        sp_lay.setContentsMargins(6, 4, 6, 4)
+        sp_lay.setSpacing(6)
+
+        sp_info = QVBoxLayout()
+        sp_info.setSpacing(1)
+        sp_title = QLabel("🎵  JARVIS Audio Engine")
+        sp_title.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+        sp_title.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
+        sp_sub = QLabel("Spotify AI DJ Ready")
+        sp_sub.setFont(QFont("Courier New", 6))
+        sp_sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        sp_info.addWidget(sp_title)
+        sp_info.addWidget(sp_sub)
+        sp_lay.addLayout(sp_info, stretch=1)
+
+        sp_btn_play = QPushButton("▶")
+        sp_btn_next = QPushButton("⏭")
+        for b in [sp_btn_play, sp_btn_next]:
+            b.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            b.setFixedSize(24, 22)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(f"QPushButton {{ background: {C.PANEL}; color: {C.PRI}; border: 1px solid {C.BORDER_A}; border-radius: 3px; }} QPushButton:hover {{ color: {C.GREEN}; border: 1px solid {C.GREEN}; }}")
+        
+        sp_btn_play.clicked.connect(lambda: self._send_text_cmd("play spotify"))
+        sp_btn_next.clicked.connect(lambda: self._send_text_cmd("next song on spotify"))
+        
+        sp_lay.addWidget(sp_btn_play)
+        sp_lay.addWidget(sp_btn_next)
+        lay.addWidget(spot_card)
+        lay.addSpacing(2)
 
         lay.addWidget(_sec("FILE UPLOAD"))
         self._drop_zone = FileDropZone()
