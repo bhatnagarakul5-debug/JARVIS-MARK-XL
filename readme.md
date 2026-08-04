@@ -52,30 +52,27 @@ cd JARVIS-MARK-XL
 ```
 
 ### 2. Run Automated Setup (1-Click)
-Double-click **`setup.bat`** (or run in terminal):
-```bash
-setup.bat
-```
-*(This automatically creates a virtual environment, installs all required packages without PATH errors, and sets up your configuration files).*
+- **Windows**: Double-click **`setup.bat`** (or run `setup.bat` in CMD / PowerShell / Git Bash).
+- **macOS / Linux**: Run `chmod +x setup.sh main.sh && ./setup.sh`.
+
+*(This automatically creates a virtual environment, installs all required packages without PATH errors, enables Windows Long Paths, and sets up your configuration files).*
 
 ### 3. Configure API Keys
-Add your Gemini API key in `config/api_keys.json`:
+Get a free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) and paste it into `config/api_keys.json`:
 ```json
 {
-    "gemini_api_key": "YOUR_GEMINI_API_KEY",
-    "openrouter_api_key": "YOUR_OPENROUTER_API_KEY",
-    "email_address": "your_email@gmail.com",
-    "email_app_password": "your_app_password",
-    "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN"
+    "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE"
 }
 ```
-*(Note: If no `api_keys.json` is found on first run, JARVIS opens an interactive Setup Overlay UI for you to enter your keys).*
 
 ### 4. Launch JARVIS
-Double-click **`main.bat`** or run:
-```bash
-main.bat
-```
+- **Windows**: Double-click **`main.bat`** or run `main.bat`
+- **macOS / Linux**: Run `./main.sh`
+
+---
+
+## 🛠️ Need Help?
+Check out our detailed [TROUBLESHOOTING.md](TROUBLESHOOTING.md) guide for instant fixes to common Windows, Python, or PATH setup questions!
 
 ---
 

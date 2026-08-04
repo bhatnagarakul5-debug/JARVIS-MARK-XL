@@ -83,6 +83,11 @@ def get_base_dir():
 
 
 BASE_DIR        = get_base_dir()
+
+# Auto-create essential workspace directories at startup
+for d in ["config", "memory", "downloads", "scratch"]:
+    (BASE_DIR / d).mkdir(parents=True, exist_ok=True)
+
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
 LIVE_MODEL          = "gemini-2.5-flash-native-audio-latest"
@@ -107,8 +112,19 @@ def _set_cached_query(key: str, val: str):
 
 
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    """Reads Gemini API Key from config/api_keys.json cleanly without crashing if missing."""
+    try:
+        if not API_CONFIG_PATH.exists():
+            API_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            API_CONFIG_PATH.write_text(json.dumps({"gemini_api_key": ""}, indent=4), encoding="utf-8")
+            return ""
+        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            key = json.load(f).get("gemini_api_key", "").strip()
+            if key in ("YOUR_GEMINI_API_KEY_HERE", "YOUR_GEMINI_API_KEY"):
+                return ""
+            return key
+    except Exception:
+        return ""
 
 
 def _load_system_prompt() -> str:
