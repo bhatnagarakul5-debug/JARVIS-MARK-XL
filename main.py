@@ -70,6 +70,9 @@ from actions.ghost_protocol import ghost_protocol
 from actions.project_autopilot import create_project_workspace
 from actions.antigravity_coder import antigravity_coder
 from actions.antigravity_ide_bridge import antigravity_ide_control
+from actions.file_watcher import smart_file_watcher, file_watcher_control
+from actions.call_manager import call_manager_control
+from core.autonomous_watchdog import autonomous_watchdog
 from core.skills_engine import mark_41_skills_control, skills_engine
 from core.parallel_orchestrator import parallel_orchestrator
 from core.offline_fallback import offline_fallback
@@ -1031,6 +1034,62 @@ TOOL_DECLARATIONS = [
             "required": []
         }
     },
+    {
+        "name": "file_watcher",
+        "description": "Smart Downloads & Desktop File Watcher. Real-time background monitoring of Downloads folder, document PDF summarization, and auto-organization into subfolders.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "status | organize | clean"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "call_manager",
+        "description": "Autonomous Phone Call & Live Voice Conversation Engine. JARVIS places the call, SPEAKS to the person on the other side using AI voice, LISTENS to their responses, and holds a full autonomous conversation. Supports WhatsApp and Phone Link calls. Use for: placing calls, booking appointments, making reservations, gathering information — all autonomously.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":       {"type": "STRING", "description": "make_call | whatsapp | phone_link | takeover | status"},
+                "phone_number": {"type": "STRING", "description": "Target phone number or contact name"},
+                "objective":    {"type": "STRING", "description": "What JARVIS should accomplish on the call (e.g. 'Book a table for 2 at 8 PM', 'Confirm appointment', 'Ask about delivery status')"}
+            },
+            "required": ["phone_number"]
+        }
+    },
+    {
+        "name": "stunt_assistant",
+        "description": (
+            "Accesses Akul's STUNT student tracker database directly. "
+            "Use this whenever Akul asks about college lectures, timetable schedule, upcoming classes, "
+            "logging attendance (e.g. 'attended Finance today', 'mark me present in Stats'), "
+            "checking if he can bunk a class, or getting a college daily briefing. "
+            "Talks like a proper friend and wingman — warm, witty, loyal, and keeps him on track."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "get_schedule | get_next_class | log_attendance | bunk_check | attendance_status | college_briefing"
+                },
+                "subject": {
+                    "type": "STRING",
+                    "description": "Name of the college subject (e.g. 'International Finance', 'Economics', 'Marketing')"
+                },
+                "status": {
+                    "type": "STRING",
+                    "description": "Present | Absent | Cancelled (defaults to Present)"
+                },
+                "date": {
+                    "type": "STRING",
+                    "description": "Date in YYYY-MM-DD format (defaults to today)"
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 
@@ -1448,6 +1507,14 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: antigravity_ide_control(parameters=args, player=self.ui))
                 result = r or "Antigravity IDE Bridge task executed."
 
+            elif name == "file_watcher":
+                r = await loop.run_in_executor(None, lambda: file_watcher_control(parameters=args, player=self.ui))
+                result = r or "File Watcher status updated."
+
+            elif name == "call_manager":
+                r = await loop.run_in_executor(None, lambda: call_manager_control(parameters=args, player=self.ui))
+                result = r or "Call Manager task executed."
+
 
             elif name == "shutdown_jarvis":
                 confirm_code = args.get("confirm_code", "")
@@ -1465,6 +1532,12 @@ class JarvisLive:
 
                     threading.Thread(target=_shutdown, daemon=True).start()
                     result = "Shutting down JARVIS."
+
+            elif name == "stunt_assistant":
+                from actions.stunt_bridge import stunt_assistant
+                r = await loop.run_in_executor(None, lambda: stunt_assistant(parameters=args, player=self.ui))
+                result = r or "College student tracker updated."
+
             else:
                 result = f"Unknown tool: {name}"
 
@@ -1783,6 +1856,10 @@ def main():
     ui = JarvisUI("face.png")
     for r in reports:
         ui.write_log(f"HW: {r}")
+
+    # Launch Mark XLII Autonomous Daemons (Watchdog & File Watcher)
+    autonomous_watchdog.start_watchdog(player=ui)
+    smart_file_watcher.start_watcher(player=ui)
 
     def runner():
         ui.wait_for_api_key()
