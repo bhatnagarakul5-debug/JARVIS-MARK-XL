@@ -128,7 +128,7 @@ def stunt_assistant(parameters: dict = None, player=None) -> str:
             sub_id_used = matched_sub["id"]
             sub_name_used = matched_sub["name"]
 
-        att_id = f"att-{int(now_dt.timestamp())}"
+        att_id = f"att-{int(now_dt.timestamp() * 1000)}-{os.urandom(3).hex()}"
         cursor.execute("""
             INSERT INTO attendance_logs (id, sem, subjectId, subjectName, date, status, remarks)
             VALUES (?, ?, ?, ?, ?, ?, ?)
