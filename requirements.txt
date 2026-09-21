@@ -23,5 +23,6 @@ pywinauto
 pyaudio
 chromadb
 pyttsx3
+SpeechRecognition
 pyPDF2
 python-docx

@@ -262,6 +262,7 @@ def send_message(parameters: dict, player=None) -> str:
 def _call_whatsapp(contact: str, call_type: str = "audio") -> str:
     """Makes a WhatsApp audio/video call via the Windows desktop app."""
     try:
+        pyautogui.FAILSAFE = False
         if not _open_app("WhatsApp"):
             return "Could not open WhatsApp."
         time.sleep(2.0)
@@ -316,6 +317,7 @@ def _call_whatsapp(contact: str, call_type: str = "audio") -> str:
 def _call_phone_link(contact: str) -> str:
     """Makes a phone call via the Phone Link (Your Phone) Windows app."""
     try:
+        pyautogui.FAILSAFE = False
         if not _open_app("Phone Link"):
             return "Could not open Phone Link. Make sure it's set up with your phone."
         time.sleep(3.5)

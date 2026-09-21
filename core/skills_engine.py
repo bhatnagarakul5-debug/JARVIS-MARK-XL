@@ -1,5 +1,5 @@
 """
-core/skills_engine.py — J.A.R.V.I.S. Mark XLI "Bones" Dynamic Skills Engine
+core/skills_engine.py — J.A.R.V.I.S. Mark 58 (Apex Core) Dynamic Skills Engine
 Dynamically discovers, loads, registers, and reloads action skill modules at runtime.
 """
 
@@ -63,7 +63,7 @@ class SkillsEngine:
                     "functions": funcs,
                     "path": self.loaded_skills[skill_name]["path"]
                 }
-                return f"Mark XLI Bones Engine: Skill '{skill_name}' successfully reloaded at runtime."
+                return f"Mark 58 Apex Engine: Skill '{skill_name}' successfully reloaded at runtime."
             except Exception as e:
                 return f"Failed to reload skill '{skill_name}': {e}"
         else:
@@ -76,14 +76,14 @@ class SkillsEngine:
                     "functions": funcs,
                     "path": str(ACTIONS_DIR / f"{skill_name}.py")
                 }
-                return f"Mark XLI Bones Engine: New skill '{skill_name}' dynamically loaded!"
+                return f"Mark 58 Apex Engine: New skill '{skill_name}' dynamically loaded!"
             except Exception as e:
                 return f"Skill '{skill_name}' not found or invalid: {e}"
 
     def list_skills(self) -> str:
         """Lists all active loaded skills and their exported functions."""
         self.discover_skills()
-        lines = [f"=== J.A.R.V.I.S. Mark XLI Active Skill Modules ({len(self.loaded_skills)}) ==="]
+        lines = [f"=== J.A.R.V.I.S. Mark 58 Active Skill Modules ({len(self.loaded_skills)}) ==="]
         for name, data in sorted(self.loaded_skills.items()):
             fn_count = len(data['functions'])
             lines.append(f"• {name.ljust(22)} ({fn_count} functions)")
@@ -92,8 +92,8 @@ class SkillsEngine:
 
 skills_engine = SkillsEngine()
 
-def mark_41_skills_control(parameters: dict, player=None) -> str:
-    """Action handler for Mark XLI Bones Dynamic Skills Control."""
+def mark_58_skills_control(parameters: dict, player=None) -> str:
+    """Action handler for Mark 58 Apex Core Dynamic Skills Control."""
     params = parameters or {}
     action = (params.get("action") or "list").lower().strip()
     skill_name = params.get("skill_name", "").strip()
@@ -104,3 +104,7 @@ def mark_41_skills_control(parameters: dict, player=None) -> str:
         return skills_engine.reload_skill(skill_name)
 
     return skills_engine.list_skills()
+
+# Backward compatibility aliases
+mark_41_skills_control = mark_58_skills_control
+mark_45_skills_control = mark_58_skills_control

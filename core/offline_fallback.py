@@ -1,5 +1,5 @@
 """
-core/offline_fallback.py — J.A.R.V.I.S. Mark XLI "Bones" Offline Cyber Fallback Engine
+core/offline_fallback.py — J.A.R.V.I.S. Mark 58 (Apex Core) Offline Cyber Fallback Engine
 Monitors internet connectivity and handles local system macros when offline.
 """
 
@@ -43,24 +43,24 @@ class OfflineFallbackEngine:
         if "lock" in text_lower or "workstation" in text_lower:
             import ctypes
             ctypes.windll.user32.LockWorkStation()
-            return "[OFFLINE ENGINE] Workstation locked."
+            return "[MARK 58 OFFLINE ENGINE] Workstation locked."
 
         if "mute" in text_lower:
             import pyautogui
             pyautogui.press("volumemute")
-            return "[OFFLINE ENGINE] Muted audio."
+            return "[MARK 58 OFFLINE ENGINE] Muted audio."
 
         if "volume up" in text_lower:
             import pyautogui
             for _ in range(5): pyautogui.press("volumeup")
-            return "[OFFLINE ENGINE] Volume increased."
+            return "[MARK 58 OFFLINE ENGINE] Volume increased."
 
         if "volume down" in text_lower:
             import pyautogui
             for _ in range(5): pyautogui.press("volumedown")
-            return "[OFFLINE ENGINE] Volume decreased."
+            return "[MARK 58 OFFLINE ENGINE] Volume decreased."
 
-        return f"[OFFLINE ENGINE] System online check: {'ONLINE 🌐' if self.is_online else 'OFFLINE ⚠️'}"
+        return f"[MARK 58 OFFLINE ENGINE] System online check: {'ONLINE 🌐' if self.is_online else 'OFFLINE ⚠️'}"
 
 
 offline_fallback = OfflineFallbackEngine()

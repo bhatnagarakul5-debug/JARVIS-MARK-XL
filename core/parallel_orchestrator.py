@@ -1,5 +1,5 @@
 """
-core/parallel_orchestrator.py — J.A.R.V.I.S. Mark XLI "Bones" Asynchronous Task Orchestrator
+core/parallel_orchestrator.py — J.A.R.V.I.S. Mark 58 (Apex Core) Asynchronous Task Orchestrator
 Executes long-running worker tasks (research, media processing, code generation) in background threads without voice lag.
 """
 
@@ -16,7 +16,7 @@ class ParallelOrchestrator:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="Mark41_SubBrain")
+            cls._instance.executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="Mark58_SubBrain")
             cls._instance.active_tasks = {}
             cls._instance.completed_tasks = {}
             cls._instance._lock = threading.Lock()
@@ -71,9 +71,9 @@ class ParallelOrchestrator:
             done = list(self.completed_tasks.values())
 
         if not running and not done:
-            return "Mark XLI Parallel Orchestrator: All background sub-brain workers idle."
+            return "Mark 58 Parallel Orchestrator: All background sub-brain workers idle."
 
-        lines = ["=== Mark XLI Parallel Sub-Brain Tasks ==="]
+        lines = ["=== Mark 58 Parallel Sub-Brain Tasks ==="]
         if running:
             lines.append(f"Running Tasks ({len(running)}):")
             for t in running:

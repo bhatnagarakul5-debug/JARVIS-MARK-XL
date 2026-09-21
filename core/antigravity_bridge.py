@@ -1,5 +1,5 @@
 """
-core/antigravity_bridge.py — Antigravity IDE & AI Workspace Bridge for J.A.R.V.I.S. Mark XLI
+core/antigravity_bridge.py — Antigravity IDE & AI Workspace Bridge for J.A.R.V.I.S. Mark 58 (Apex Core)
 Enables 2-way telemetry and context sharing between JARVIS and Antigravity AI pair programmer.
 Allows JARVIS to inspect live plans, artifacts, walkthroughs, and active tasks.
 """
@@ -49,7 +49,7 @@ def dispatch_task_to_ide(instruction: str) -> str:
         queue_file = scratch_dir / "agent_instruction.json"
         data = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "sender": "JARVIS Mark XLI",
+            "sender": "JARVIS Mark 58",
             "instruction": instruction
         }
         queue_file.write_text(json.dumps(data, indent=2), encoding="utf-8")

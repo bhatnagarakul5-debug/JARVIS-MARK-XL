@@ -1,6 +1,8 @@
 import asyncio
 import threading
 import json
+import time
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -52,7 +54,7 @@ from actions.calendar_manager import calendar_manager
 from actions.document_chat     import document_chat
 from actions.focus_mode        import focus_mode
 from actions.personality_engine import set_personality, get_personality_instruction
-from actions.camera_system     import camera_control, camera_mgr
+from actions.camera_system     import camera_control
 from actions.davinci_control    import davinci_control
 from actions.auto_video_editor import auto_edit_video
 from actions.audio_device_manager import audio_device_control, audio_device_mgr
@@ -73,7 +75,7 @@ from actions.antigravity_ide_bridge import antigravity_ide_control
 from actions.file_watcher import smart_file_watcher, file_watcher_control
 from actions.call_manager import call_manager_control
 from core.autonomous_watchdog import autonomous_watchdog
-from core.skills_engine import mark_41_skills_control, skills_engine
+from core.skills_engine import mark_58_skills_control, mark_41_skills_control
 from core.parallel_orchestrator import parallel_orchestrator
 from core.offline_fallback import offline_fallback
 from memory.conversation_log   import log_exchange
@@ -977,8 +979,20 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "mark_58_control",
+        "description": "J.A.R.V.I.S. Mark 58 (Mark LVIII Apex Core) Control. Dynamically reloads/loads python skill modules, checks parallel sub-brain tasks, toggles desktop floating telemetry HUD, or checks offline fallback status.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "reload_skills | list_skills | sub_brain_status | toggle_hud | offline_check"},
+                "skill_name": {"type": "STRING", "description": "Name of skill module to reload"}
+            },
+            "required": []
+        }
+    },
+    {
         "name": "mark_41_control",
-        "description": "J.A.R.V.I.S. Mark XLI (Mark 41 Bones) Core Control. Dynamically reloads/loads python skill modules, checks parallel sub-brain tasks, toggles desktop floating telemetry HUD, or checks offline fallback status.",
+        "description": "Alias for mark_58_control. Dynamically reloads/loads python skill modules, checks parallel sub-brain tasks, toggles desktop floating telemetry HUD, or checks offline fallback status.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -1221,8 +1235,8 @@ class JarvisLive:
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
         args = dict(fc.args or {})
-
-        print(f"[JARVIS] 🔧 {name}  {args}")
+        safe_args = {k: ("***" if any(s in k.lower() for s in ["pass", "token", "secret", "key"]) else v) for k, v in args.items()}
+        print(f"[JARVIS] 🔧 {name}  {safe_args}")
         self.ui.set_state("THINKING")
         if name == "save_memory":
             category = args.get("category", "notes")
@@ -1477,19 +1491,19 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: war_mode_control(parameters=args, player=self.ui))
                 result = r or "War Mode state updated."
 
-            elif name == "mark_41_control":
+            elif name in ("mark_58_control", "mark_41_control", "mark_45_control"):
                 action = args.get("action", "list_skills")
                 if action in ("toggle_hud", "hud"):
                     from ui_hud_overlay import launch_hud_overlay
                     r = await loop.run_in_executor(None, launch_hud_overlay)
-                    result = "Mark XLI Floating HUD Telemetry Launched."
+                    result = "Mark 58 Floating HUD Telemetry Launched."
                 elif action == "sub_brain_status":
                     result = parallel_orchestrator.list_active_tasks()
                 elif action == "offline_check":
                     result = offline_fallback.execute_offline_command("check")
                 else:
-                    r = await loop.run_in_executor(None, lambda: mark_41_skills_control(parameters=args, player=self.ui))
-                    result = r or "Mark XLI Skills Engine updated."
+                    r = await loop.run_in_executor(None, lambda: mark_58_skills_control(parameters=args, player=self.ui))
+                    result = r or "Mark 58 Skills Engine updated."
 
             elif name == "ghost_protocol":
                 r = await loop.run_in_executor(None, lambda: ghost_protocol(parameters=args, player=self.ui))
@@ -1857,7 +1871,7 @@ def main():
     for r in reports:
         ui.write_log(f"HW: {r}")
 
-    # Launch Mark XLII Autonomous Daemons (Watchdog & File Watcher)
+    # Launch Mark 58 Autonomous Daemons (Watchdog & File Watcher)
     autonomous_watchdog.start_watchdog(player=ui)
     smart_file_watcher.start_watcher(player=ui)
 

@@ -538,6 +538,25 @@ class TelegramRemoteBridge:
                 res = antigravity_ide_control({"action": "status"}, player=self.player)
                 self._send_reply(chat_id, f"🚀 {res}")
 
+        # 📞 Autonomous Phone Call Manager (/call <target> <objective>)
+        elif cmd_low.startswith("/call ") or cmd_low.startswith("call "):
+            call_args = cmd.split(" ", 1)[1].strip()
+            parts = call_args.split(" ", 1)
+            target = parts[0].strip()
+            objective = parts[1].strip() if len(parts) > 1 else "General Inquiry"
+
+            from actions.call_manager import call_manager_control
+            res = call_manager_control({"action": "make_call", "phone_number": target, "objective": objective}, player=self.player)
+            self._send_reply(chat_id, f"📞 {res}")
+            _audit_log(f"Initiated call to {target} | Objective: '{objective}'")
+
+        # 🎙️ Call Takeover (/takeover)
+        elif cmd_low.startswith("/takeover") or cmd_low.startswith("takeover"):
+            from actions.call_manager import call_manager_control
+            res = call_manager_control({"action": "takeover"}, player=self.player)
+            self._send_reply(chat_id, f"🎙️ {res}")
+            _audit_log("Executed call takeover.")
+
         # ⏰ Reminder Sync (/remind <time> <msg>)
         elif cmd_low.startswith("/remind ") or cmd_low.startswith("remind "):
             rem_str = cmd.split(" ", 1)[1].strip()

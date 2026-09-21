@@ -1,4 +1,4 @@
-# 🤖 J.A.R.V.I.S. Mark XLI (Bones Core) — Advanced AI Workstation Suite
+# 🤖 J.A.R.V.I.S. Mark 58 (Apex Core) — Advanced AI Workstation Suite
 
 > **Creator**: Akul Bhatnagar  
 > **Origin**: India | **Established**: 2025  
@@ -10,34 +10,44 @@
 
 ## 🌟 Overview
 
-**J.A.R.V.I.S. Mark XLI (Bones Core)** is an autonomous, ultra-low latency AI workstation assistant inspired by Tony Stark's iconic Mark XLI suit. Built for Windows with full **Intel UHD GPU OpenCL Hardware Acceleration** and **12-Core CPU Thread Tuning**, JARVIS integrates real-time voice interaction, OS desktop automation, mobile remote control, cyber security safeguards, and multi-app control.
+**J.A.R.V.I.S. Mark 58 (Apex Core)** is an autonomous, ultra-low latency AI workstation assistant inspired by Tony Stark's iconic Mark LVIII suit. Built for Windows with full **Intel UHD GPU OpenCL Hardware Acceleration** and **12-Core CPU Thread Tuning**, JARVIS integrates real-time voice interaction, autonomous telephony, OS desktop automation, mobile remote control, cyber security safeguards, and multi-app control.
 
 ---
 
 ## ⚡ Key Features & Tactical Protocols
 
-### 🔴 1. War Mode (House Party Protocol)
-- **Visual Transformation**: Instantly switches UI from Iron Man Cyan to **Crimson Red & Ember Gold Tactical HUD**.
+### 📞 1. Autonomous Live Phone Calls & AI Telephony
+- **Full-Duplex Voice Calls**: Places calls via WhatsApp Desktop / Phone Link and holds natural live conversations using AI speech synthesis (TTS) and speech recognition (STT).
+- **Executive Task Objectives**: Books appointments, confirms schedules, and makes reservations autonomously on your behalf.
+- **Seamless Takeover**: Say *"JARVIS, I'm here to take over"* or send `/takeover` from Telegram to take over any live call.
+
+### 📁 2. Smart Downloads & Desktop File Watcher
+- **Real-Time Directory Monitoring**: Automatically detects new downloads in real-time.
+- **Document & PDF Summaries**: Instantly extracts and summarizes incoming PDFs and documents.
+- **Automatic Organization**: Auto-categorizes incoming files into Documents, Images, and Archives.
+
+### 🔴 3. War Mode (House Party Protocol)
+- **Visual Transformation**: Instantly switches UI from Electric Cyan to **Crimson Red & Ember Gold Tactical HUD**.
 - **Performance Lock**: Pins CPU/GPU performance priority to `HIGH_PRIORITY_CLASS`.
 - **On-Demand App Launching**: Deploys applications under high-performance priority when requested.
 
-### 🛡️ 2. Sentry Mode & Security Shield
+### 🛡️ 4. Sentry Mode & Security Shield
 - **Perimeter Defense**: Instant 0.01s Windows Workstation lock (`LockWorkStation`).
 - **Multi-Channel Phone Alerts**: Dispatches automated alert messages directly to your phone via **Telegram (`@AKULJARVIS_BOT`) and WhatsApp**.
 - **Wi-Fi Network Scanner**: Scans local LAN/Wi-Fi for active dynamic IP leases and connected devices.
 
-### 👻 3. Ghost Protocol (Stealth & Privacy)
+### 👻 5. Ghost Protocol (Stealth & Privacy)
 - **1-Click Privacy**: Minimizes all active desktop windows (`Win + D`), mutes audio output, and wipes clipboard memory instantly.
 
-### 🛠️ 4. Stark Project Auto-Pilot
+### 🛠️ 6. Stark Project Auto-Pilot
 - **Automated Workspace Builder**: Creates structured project directories (`Python`, `DaVinci Video`, `Web`, `C++`), populates starter boilerplate files, and opens workspace in VS Code.
 
-### 📱 5. Telegram Remote Control & WhatsApp Chat Engine
+### 📱 7. Telegram Remote Control & WhatsApp Chat Engine
 - **2-Way Mobile Control**: Text commands or send photos to your Telegram Bot from your phone anytime.
 - **Telegram Face Memory**: Upload photos on Telegram to save and identify face profiles without laptop webcam load.
 - **WhatsApp Chat Vault**: Unlocks Locked Chats vault via passcode, reads unread messages, and sends automated AI replies.
 
-### 🎧 6. AI Voice DJ & DaVinci Resolve Video Editor
+### 🎧 8. AI Voice DJ & DaVinci Resolve Video Editor
 - **Spotify Voice DJ**: Controls playback, volume, and matches curated playlists to your mood (`war_mode`, `coding`, `chill`, `workout`, `focus`).
 - **DaVinci Resolve AI Editor**: Performs cuts, marker placements, page switches, beat-sync editing, and auto-color grading.
 

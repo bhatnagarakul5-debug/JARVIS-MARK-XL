@@ -5,6 +5,7 @@ import math
 import os
 import platform
 import random
+import re
 import subprocess
 import sys
 import threading
@@ -82,6 +83,10 @@ class _SysMetrics:
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
+        self._last_gpu_t = 0.0
+        self._cached_gpu = -1.0
+        self._last_tmp_t = 0.0
+        self._cached_tmp = -1.0
         self._running = True
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
@@ -122,6 +127,15 @@ class _SysMetrics:
             self.tmp = tmp
 
     def _get_gpu(self) -> float:
+        now = time.time()
+        if now - self._last_gpu_t < 10.0 and self._cached_gpu != -1.0:
+            return self._cached_gpu
+        val = self._query_gpu()
+        self._cached_gpu = val
+        self._last_gpu_t = now
+        return val
+
+    def _query_gpu(self) -> float:
         # NVIDIA
         try:
             r = subprocess.run(
@@ -223,6 +237,15 @@ class _SysMetrics:
         return -1.0
 
     def _get_temp(self) -> float:
+        now = time.time()
+        if now - self._last_tmp_t < 10.0 and self._cached_tmp != -1.0:
+            return self._cached_tmp
+        val = self._query_temp()
+        self._cached_tmp = val
+        self._last_tmp_t = now
+        return val
+
+    def _query_temp(self) -> float:
         try:
             temps = psutil.sensors_temperatures()
             candidates = ["coretemp", "k10temp", "cpu_thermal", "acpitz",
@@ -274,6 +297,9 @@ class _SysMetrics:
                 "gpu": self.gpu,
                 "tmp": self.tmp,
             }
+
+    def stop(self):
+        self._running = False
 
 
 _metrics = _SysMetrics()
@@ -906,6 +932,19 @@ class _DropCanvas(QWidget):
             z.mousePressEvent(e)
 
 
+_cv2_module = None
+
+def _get_cv2():
+    global _cv2_module
+    if _cv2_module is None:
+        try:
+            import cv2
+            _cv2_module = cv2
+        except Exception:
+            _cv2_module = False
+    return _cv2_module if _cv2_module is not False else None
+
+
 class CameraPreviewWidget(QWidget):
     """Futuristic HUD Camera preview widget that displays live OpenCV feed when camera is ON."""
     def __init__(self, parent=None):
@@ -917,7 +956,9 @@ class CameraPreviewWidget(QWidget):
 
     def update_frame(self, cv_frame):
         try:
-            import cv2
+            cv2 = _get_cv2()
+            if cv2 is None:
+                return
             h, w, ch = cv_frame.shape
             bytes_per_line = ch * w
             rgb = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2RGB)
@@ -1431,7 +1472,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, face_path: str):
         super().__init__()
-        self.setWindowTitle("J.A.R.V.I.S — MARK XLI (BONES)")
+        self.setWindowTitle("J.A.R.V.I.S — MARK 58 (APEX CORE)")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
 
@@ -1492,7 +1533,10 @@ class MainWindow(QMainWindow):
         self._settings_overlay: SettingsOverlay | None = None
         self._history_overlay: HistoryOverlay | None = None
         self._ready = self._check_config()
-        if not self._ready:
+        self.ready_event = threading.Event()
+        if self._ready:
+            self.ready_event.set()
+        else:
             self._show_setup()
 
         sc_mute = QShortcut(QKeySequence("F4"), self)
@@ -1550,22 +1594,33 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._overlay and self._overlay.isVisible():
-            ow, oh = 460, 390
-            cw = self.centralWidget()
-            self._overlay.setGeometry(
-                (cw.width()  - ow) // 2,
-                (cw.height() - oh) // 2,
-                ow, oh,
-            )
-        if self._settings_overlay and self._settings_overlay.isVisible():
-            ow, oh = 420, 520
-            cw = self.centralWidget()
-            self._settings_overlay.setGeometry(
-                (cw.width()  - ow) // 2,
-                (cw.height() - oh) // 2,
-                ow, oh,
-            )
+        cw = self.centralWidget()
+        if cw:
+            if self._overlay and self._overlay.isVisible():
+                ow, oh = 460, 430
+                self._overlay.setGeometry((cw.width() - ow) // 2, (cw.height() - oh) // 2, ow, oh)
+            if self._settings_overlay and self._settings_overlay.isVisible():
+                ow, oh = 420, 520
+                self._settings_overlay.setGeometry((cw.width() - ow) // 2, (cw.height() - oh) // 2, ow, oh)
+            if self._history_overlay and self._history_overlay.isVisible():
+                ow, oh = 480, 520
+                self._history_overlay.setGeometry((cw.width() - ow) // 2, (cw.height() - oh) // 2, ow, oh)
+
+    def closeEvent(self, event):
+        try:
+            if hasattr(self, "_clock_tmr"):
+                self._clock_tmr.stop()
+            if hasattr(self, "_metric_tmr"):
+                self._metric_tmr.stop()
+            if hasattr(self, "hud") and hasattr(self.hud, "_tmr"):
+                self.hud._tmr.stop()
+            _metrics.stop()
+            from actions.camera_system import camera_mgr
+            if camera_mgr.is_active:
+                camera_mgr.stop()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
@@ -1622,6 +1677,7 @@ class MainWindow(QMainWindow):
         w = QWidget()
         w.setFixedHeight(54)
         w.setStyleSheet(f"background: {C.DARK}; border-bottom: 1px solid {C.BORDER_B};")
+        self._header_widget = w
         lay = QHBoxLayout(w)
         lay.setContentsMargins(16, 0, 16, 0)
 
@@ -1631,7 +1687,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_badge("MARK XLI // BONES", C.PRI))
+        lay.addWidget(_badge("MARK 58 // APEX CORE", C.PRI))
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1813,7 +1869,7 @@ class MainWindow(QMainWindow):
         for txt, col in [
             ("AI CORE\nACTIVE",     C.GREEN),
             ("SEC\nCLEARED",        C.PRI),
-            ("PROTOCOL\nMARK XL",   C.TEXT_DIM),
+            ("PROTOCOL\nMARK 58",   C.TEXT_DIM),
         ]:
             lbl = QLabel(txt)
             lbl.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
@@ -2050,6 +2106,7 @@ class MainWindow(QMainWindow):
         w = QWidget()
         w.setFixedHeight(22)
         w.setStyleSheet(f"background: {C.DARK}; border-top: 1px solid {C.BORDER};")
+        self._footer_widget = w
         lay = QHBoxLayout(w); lay.setContentsMargins(14, 0, 14, 0)
 
         def _fl(txt, color=C.TEXT_MED):
@@ -2059,7 +2116,7 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(_fl("[F4] Mute  ·  [F6] Camera  ·  [F11] Fullscreen"))
         lay.addStretch()
-        lay.addWidget(_fl("Akul Bhatnagar Industries  ·  MARK XL  ·  CLASSIFIED"))
+        lay.addWidget(_fl("Akul Bhatnagar Industries  ·  MARK 58  ·  CLASSIFIED"))
         lay.addStretch()
         lay.addWidget(_fl("© STARK INDUSTRIES", C.PRI_DIM))
         return w
@@ -2176,6 +2233,7 @@ class MainWindow(QMainWindow):
             encoding="utf-8",
         )
         self._ready = True
+        self.ready_event.set()
         if self._overlay:
             self._overlay.hide()
             self._overlay = None
@@ -2253,6 +2311,23 @@ class MainWindow(QMainWindow):
             C.BAR_BG    = "#011520"
             self._log.append_log("SYS: WAR PROTOCOL DEACTIVATED. STANDBY HUD RESTORED.")
             self.push_notification("War protocol deactivated -- Standby mode", "info")
+
+        # Dynamically refresh stylesheets of all outer structural containers
+        try:
+            if hasattr(self, "_header_widget") and self._header_widget:
+                self._header_widget.setStyleSheet(f"background: {C.DARK}; border-bottom: 1px solid {C.BORDER_B};")
+            if hasattr(self, "_footer_widget") and self._footer_widget:
+                self._footer_widget.setStyleSheet(f"background: {C.DARK}; border-top: 1px solid {C.BORDER};")
+            if hasattr(self, "_left_panel") and self._left_panel:
+                self._left_panel.setStyleSheet(f"background: {C.DARK}; border-right: 1px solid {C.BORDER};")
+            if hasattr(self, "_right_panel") and self._right_panel:
+                self._right_panel.setStyleSheet(f"background: {C.DARK}; border-left: 1px solid {C.BORDER};")
+            if self.centralWidget():
+                self.centralWidget().setStyleSheet(f"background: {C.BG};")
+            if hasattr(self, "hud") and self.hud:
+                self.hud.update()
+        except Exception:
+            pass
         self.update()
 
 
@@ -2310,8 +2385,11 @@ class JarvisUI:
         self._win.update_dashboard(wx, evt, mail)
 
     def wait_for_api_key(self):
-        while not self._win._ready:
-            time.sleep(0.1)
+        if hasattr(self._win, "ready_event"):
+            self._win.ready_event.wait()
+        else:
+            while not self._win._ready:
+                time.sleep(0.1)
 
     def start_speaking(self):
         self.set_state("SPEAKING")

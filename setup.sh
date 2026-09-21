@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 echo "==================================================="
-echo "  J.A.R.V.I.S. Mark XLI -- Automated Setup Engine"
+echo "  J.A.R.V.I.S. Mark 58 -- Automated Setup Engine"
 echo "==================================================="
 echo ""
 

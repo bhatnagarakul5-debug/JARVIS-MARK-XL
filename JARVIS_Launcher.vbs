@@ -1,3 +1,7 @@
+Set fso = CreateObject("Scripting.FileSystemObject")
+strDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run chr(34) & "C:\Users\Akul\OneDrive\Desktop\Jarvis-Mark-XL\main.bat" & chr(34), 0
+WshShell.CurrentDirectory = strDir
+WshShell.Run """" & strDir & "\main.bat""", 0, False
 Set WshShell = Nothing
+Set fso = Nothing

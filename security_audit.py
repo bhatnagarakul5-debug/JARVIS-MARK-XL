@@ -21,6 +21,8 @@ FORBIDDEN_FILES = [
     "config/jarvis_settings.json",
     "memory/conversation_log.json",
     "memory/user_memory.json",
+    "memory/conversations.jsonl",
+    "memory/long_term.json",
     "config/known_faces",
     "memory/chroma_db",
 ]
@@ -42,7 +44,10 @@ def run_security_audit():
     try:
         status_out = subprocess.check_output("git status --porcelain", shell=True, text=True, cwd=BASE_DIR)
         for line in status_out.splitlines():
+            status_code = line[:2]
             file_path = line[3:].strip()
+            if status_code.strip() == "D" or status_code.startswith("D"):
+                continue
             if file_path.endswith(".example"):
                 continue
             for forbidden in FORBIDDEN_FILES:

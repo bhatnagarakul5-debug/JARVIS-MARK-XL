@@ -1,4 +1,4 @@
-# 🛠️ J.A.R.V.I.S. Mark XLI — Troubleshooting & FAQ Guide
+# 🛠️ J.A.R.V.I.S. Mark 58 — Troubleshooting & FAQ Guide
 
 Welcome! If you encounter any issues downloading, installing, or running J.A.R.V.I.S., follow the quick solutions below.
 
@@ -46,7 +46,7 @@ Welcome! If you encounter any issues downloading, installing, or running J.A.R.V
   3. Paste your key:
      ```json
      {
-         "gemini_api_key": "AIzaSy..."
+         "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE"
      }
      ```
   4. Save the file and double-click `main.bat`!
