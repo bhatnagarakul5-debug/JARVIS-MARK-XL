@@ -654,7 +654,7 @@ class HudCanvas(QWidget):
         p.setPen(QPen(bc, 2))
         for bx, by, dx, dy in [(hl,ht,1,1),(hr,ht,-1,1),(hl,hb,1,-1),(hr,hb,-1,-1)]:
             p.drawLine(QPointF(bx, by), QPointF(bx + dx * bl, by))
-            p.drawLine(QPointF(bx, by), QPointF(bx + dy * bl))
+            p.drawLine(QPointF(bx, by), QPointF(bx, by + dy * bl))
 
         # face
         if self._face_px:
