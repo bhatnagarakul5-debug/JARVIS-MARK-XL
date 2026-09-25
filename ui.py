@@ -69,6 +69,14 @@ class C:
     DARK      = "#050f1e"
     BAR_BG    = "#081628"
 
+    # Emotional Spectrum Palette
+    EMO_EMPATHY   = "#9d72ff"
+    EMO_TACTICAL  = "#00f0ff"
+    EMO_WITTY     = "#ffaa00"
+    EMO_MOTIVATE  = "#ff4422"
+    EMO_COUNTER   = "#00e676"
+    EMO_VIGILANT  = "#e02050"
+
 
 def qcol(h: str, a: int = 255) -> QColor:
     c = QColor(h); c.setAlpha(a); return c
@@ -315,6 +323,10 @@ class HudCanvas(QWidget):
         self.speaking = False
         self.state    = "INITIALISING"
 
+        self.emotion = "TACTICAL"
+        self._target_aura_rgb = [0, 240, 255]
+        self._current_aura_rgb = [0.0, 240.0, 255.0]
+
         self._tick       = 0
         self._scale      = 1.0
         self._tgt_scale  = 1.0
@@ -403,7 +415,35 @@ class HudCanvas(QWidget):
         if self._blink_tick >= 38:
             self._blink = not self._blink
             self._blink_tick = 0
+
+        # Smooth aura color transition
+        for i in range(3):
+            self._current_aura_rgb[i] += (self._target_aura_rgb[i] - self._current_aura_rgb[i]) * 0.12
+
         self.update()
+
+    def get_aura_color(self, alpha: int = 255) -> QColor:
+        if self.muted:
+            return qcol(C.MUTED_C, alpha)
+        r = max(0, min(255, int(self._current_aura_rgb[0])))
+        g = max(0, min(255, int(self._current_aura_rgb[1])))
+        b = max(0, min(255, int(self._current_aura_rgb[2])))
+        return QColor(r, g, b, max(0, min(255, alpha)))
+
+    def set_emotion(self, emotion: str, color_hex: str = None):
+        self.emotion = emotion.upper()
+        if not color_hex:
+            palette = {
+                "EMPATHETIC": C.EMO_EMPATHY,
+                "TACTICAL": C.EMO_TACTICAL,
+                "WITTY": C.EMO_WITTY,
+                "MOTIVATIONAL": C.EMO_MOTIVATE,
+                "CHALLENGING": C.EMO_COUNTER,
+                "VIGILANT": C.EMO_VIGILANT,
+            }
+            color_hex = palette.get(self.emotion, C.PRI)
+        c = QColor(color_hex)
+        self._target_aura_rgb = [c.red(), c.green(), c.blue()]
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -427,14 +467,14 @@ class HudCanvas(QWidget):
             r   = r_face * (1.8 - i * 0.08)
             frc = 1.0 - i / 10
             a   = max(0, min(255, int(self._halo * 0.085 * frc)))
-            col = qcol(C.MUTED_C if self.muted else C.PRI, a)
+            col = self.get_aura_color(a)
             p.setPen(QPen(col, 1.5)); p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
 
         # pulse rings
         for pr in self._pulses:
             a   = max(0, int(230 * (1.0 - pr / (fw * 0.74))))
-            col = qcol(C.MUTED_C if self.muted else C.PRI, a)
+            col = self.get_aura_color(a)
             p.setPen(QPen(col, 1.5)); p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawEllipse(QRectF(cx - pr, cy - pr, pr * 2, pr * 2))
 
@@ -445,7 +485,7 @@ class HudCanvas(QWidget):
             ring_r = fw * r_frac
             base   = self._rings[idx]
             a_val  = max(0, min(255, int(self._halo * (1.0 - idx * 0.18))))
-            col    = qcol(C.MUTED_C if self.muted else C.PRI, a_val)
+            col    = self.get_aura_color(a_val)
             p.setPen(QPen(col, w_r)); p.setBrush(Qt.BrushStyle.NoBrush)
             angle = base
             rect  = QRectF(cx - ring_r, cy - ring_r, ring_r * 2, ring_r * 2)
@@ -457,7 +497,7 @@ class HudCanvas(QWidget):
         sr = fw * 0.50
         sa = min(255, int(self._halo * 1.5))
         ex = 75 if self.speaking else 44
-        p.setPen(QPen(qcol(C.MUTED_C if self.muted else C.PRI, sa), 2.5))
+        p.setPen(QPen(self.get_aura_color(sa), 2.5))
         p.setBrush(Qt.BrushStyle.NoBrush)
         srect = QRectF(cx - sr, cy - sr, sr * 2, sr * 2)
         p.drawArc(srect, int(self._scan * 16), int(ex * 16))
@@ -466,7 +506,7 @@ class HudCanvas(QWidget):
 
         # tick marks
         t_out, t_in = fw * 0.497, fw * 0.474
-        p.setPen(QPen(qcol(C.PRI, 140), 1))
+        p.setPen(QPen(self.get_aura_color(140), 1))
         for deg in range(0, 360, 10):
             rad = math.radians(deg)
             inn = t_in if deg % 30 == 0 else t_in + 6
@@ -477,7 +517,7 @@ class HudCanvas(QWidget):
 
         # crosshair
         ch_r, gap_h = fw * 0.51, fw * 0.16
-        p.setPen(QPen(qcol(C.PRI, int(self._halo * 0.5)), 1))
+        p.setPen(QPen(self.get_aura_color(int(self._halo * 0.5)), 1))
         p.drawLine(QPointF(cx - ch_r, cy), QPointF(cx - gap_h, cy))
         p.drawLine(QPointF(cx + gap_h, cy), QPointF(cx + ch_r, cy))
         p.drawLine(QPointF(cx, cy - ch_r), QPointF(cx, cy - gap_h))
@@ -485,13 +525,13 @@ class HudCanvas(QWidget):
 
         # corner brackets
         bl = 24
-        bc = qcol(C.PRI, 210)
+        bc = self.get_aura_color(210)
         hl, hr = cx - fw // 2, cx + fw // 2
         ht, hb = cy - fw // 2, cy + fw // 2
         p.setPen(QPen(bc, 2))
         for bx, by, dx, dy in [(hl,ht,1,1),(hr,ht,-1,1),(hl,hb,1,-1),(hr,hb,-1,-1)]:
             p.drawLine(QPointF(bx, by), QPointF(bx + dx * bl, by))
-            p.drawLine(QPointF(bx, by), QPointF(bx, by + dy * bl))
+            p.drawLine(QPointF(bx, by), QPointF(bx + dy * bl))
 
         # face
         if self._face_px:
@@ -504,7 +544,10 @@ class HudCanvas(QWidget):
             p.drawPixmap(int(cx - fsz / 2), int(cy - fsz / 2), scaled)
         else:
             orb_r = int(fw * 0.27 * self._scale)
-            oc    = (200, 0, 50) if self.muted else (0, 60, 110)
+            if self.muted:
+                oc = (200, 0, 50)
+            else:
+                oc = (int(self._current_aura_rgb[0] * 0.4), int(self._current_aura_rgb[1] * 0.4), int(self._current_aura_rgb[2] * 0.4))
             for i in range(8, 0, -1):
                 r2  = int(orb_r * i / 8)
                 frc = i / 8
@@ -512,7 +555,7 @@ class HudCanvas(QWidget):
                 p.setBrush(QBrush(QColor(int(oc[0]*frc), int(oc[1]*frc), int(oc[2]*frc), a)))
                 p.setPen(Qt.PenStyle.NoPen)
                 p.drawEllipse(QRectF(cx - r2, cy - r2, r2 * 2, r2 * 2))
-            p.setPen(QPen(qcol(C.PRI, min(255, int(self._halo * 2))), 1))
+            p.setPen(QPen(self.get_aura_color(min(255, int(self._halo * 2))), 1))
             p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
             p.drawText(QRectF(cx - 80, cy - 14, 160, 28),
                        Qt.AlignmentFlag.AlignCenter, "J.A.R.V.I.S")
@@ -521,7 +564,7 @@ class HudCanvas(QWidget):
         for pt in self._particles:
             a = max(0, min(255, int(pt[4] * 255)))
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(qcol(C.PRI, a)))
+            p.setBrush(QBrush(self.get_aura_color(a)))
             p.drawEllipse(QPointF(pt[0], pt[1]), 2.5, 2.5)
 
         # status text
@@ -541,7 +584,7 @@ class HudCanvas(QWidget):
             txt, col = f"{sym}  LISTENING",  qcol(C.GREEN)
         else:
             sym = "●" if self._blink else "○"
-            txt, col = f"{sym}  {self.state}", qcol(C.PRI)
+            txt, col = f"{sym}  {self.state}", self.get_aura_color(255)
 
         p.setPen(QPen(col, 1))
         p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
@@ -557,7 +600,7 @@ class HudCanvas(QWidget):
                 hgt, cl = 3, qcol(C.RED)
             elif self.speaking:
                 hgt = random.randint(4, 28)
-                cl  = qcol(C.PRI) if hgt > 16 else qcol(C.GREEN)
+                cl  = self.get_aura_color(255) if hgt > 16 else qcol(C.GREEN)
             elif self.state == "THINKING":
                 hgt = int(8 + 6 * math.sin(self._tick * 0.15 + i * 0.4))
                 cl  = qcol(C.ACC2)
@@ -576,6 +619,12 @@ class HudCanvas(QWidget):
                 peak_y = wy + 30 - hgt - 3
                 p.setBrush(QBrush(qcol(C.WHITE if self.speaking else C.PRI)))
                 p.drawEllipse(QPointF(wx0 + i * bw + (bw - 2) / 2, peak_y), 1.5, 1.5)
+
+        # Emotional Spectrum Telemetry Indicator
+        badge_y = wy + 42
+        p.setPen(QPen(self.get_aura_color(180), 1))
+        p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        p.drawText(QRectF(0, badge_y, W, 20), Qt.AlignmentFlag.AlignCenter, f"◆ SPECTRUM: {self.emotion}")
 
 class MetricBar(QWidget):
 
@@ -1469,6 +1518,7 @@ class MainWindow(QMainWindow):
     _notif_sig = pyqtSignal(str, str)
     _cam_frame_sig = pyqtSignal(object)
     _model_sig = pyqtSignal(str)
+    _emotion_sig = pyqtSignal(str, str)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -1528,6 +1578,7 @@ class MainWindow(QMainWindow):
         self._state_sig.connect(self._apply_state)
         self._notif_sig.connect(self._add_notification)
         self._cam_frame_sig.connect(self._cam_widget.update_frame)
+        self._emotion_sig.connect(self._apply_emotion)
 
         self._overlay: SetupOverlay | None = None
         self._settings_overlay: SettingsOverlay | None = None
@@ -2180,6 +2231,12 @@ class MainWindow(QMainWindow):
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
 
+    def _apply_emotion(self, state: str, color_hex: str):
+        self.hud.set_emotion(state, color_hex)
+
+    def set_emotion(self, state: str, color_hex: str = ""):
+        self._emotion_sig.emit(state, color_hex)
+
     def _check_config(self) -> bool:
         if not API_FILE.exists(): return False
         try:
@@ -2374,6 +2431,9 @@ class JarvisUI:
 
     def set_state(self, state: str):
         self._win._state_sig.emit(state)
+
+    def set_emotion(self, state: str, color_hex: str = ""):
+        self._win._emotion_sig.emit(state, color_hex)
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)

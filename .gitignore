@@ -18,6 +18,7 @@ memory/conversation_log.json
 memory/user_memory.json
 memory/conversations.jsonl
 memory/long_term.json
+memory/emotional_spectrum.json
 chroma_db/
 
 # 3. User Face Profile Photos & Uploaded Media

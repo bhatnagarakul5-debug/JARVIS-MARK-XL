@@ -51,6 +51,13 @@
 - **Spotify Voice DJ**: Controls playback, volume, and matches curated playlists to your mood (`war_mode`, `coding`, `chill`, `workout`, `focus`).
 - **DaVinci Resolve AI Editor**: Performs cuts, marker placements, page switches, beat-sync editing, and auto-color grading.
 
+### 🎭 9. Emotional Spectrum & Intellectual Sparring Engine
+- **6 Multi-Dimensional States**: Dynamically shifts between `EMPATHETIC`, `TACTICAL`, `WITTY`, `MOTIVATIONAL`, `CHALLENGING`, and `VIGILANT`.
+- **Intellectual Sparring & Devil's Advocate**: Rigorously probes flawed assumptions, stress-tests software architectures, and challenges premises with facts.
+- **Empathetic Grounding**: Detects stress, burnout, and fatigue; validates feelings and offers steadfast emotional support before jumping to solutions.
+- **Holographic HUD Aura Resonance**: Real-time PyQt6 HUD halo glow, pulse rings, and telemetry badges dynamically match active emotional resonance.
+- **Voice & Tool Control**: Adjust or query state anytime via `emotional_spectrum` tool (e.g. *"JARVIS, play devil's advocate"*, *"be more empathetic"*, *"motivate me"*).
+
 ---
 
 ## ⚙️ Installation & 1-Click Setup

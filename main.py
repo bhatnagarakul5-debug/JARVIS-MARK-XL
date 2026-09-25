@@ -78,6 +78,10 @@ from core.autonomous_watchdog import autonomous_watchdog
 from core.skills_engine import mark_58_skills_control, mark_41_skills_control
 from core.parallel_orchestrator import parallel_orchestrator
 from core.offline_fallback import offline_fallback
+from core.emotional_spectrum import (
+    get_emotional_spectrum, get_spectrum_prompt_injection,
+    handle_emotional_spectrum_tool
+)
 from memory.conversation_log   import log_exchange
 
 
@@ -803,6 +807,20 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "emotional_spectrum",
+        "description": "Adjusts or inspects JARVIS's Emotional Spectrum and Intellectual Sparring resonance. Use when the user requests empathy, comfort, emotional grounding, tough love / motivation, or challenges/debates (playing devil's advocate, critiquing architecture/ideas). States: empathetic | tactical | witty | motivational | challenging | vigilant | reset | get.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "set | get | spar | reset | attune (default: set)"},
+                "state": {"type": "STRING", "description": "Target state: empathetic | tactical | witty | motivational | challenging | vigilant"},
+                "intensity": {"type": "NUMBER", "description": "Emotional resonance intensity from 0.1 to 1.0 (default: 0.85)"},
+                "topic": {"type": "STRING", "description": "Optional topic for intellectual sparring or debate"}
+            },
+            "required": []
+        }
+    },
+    {
         "name": "camera_control",
         "description": "Face Profile Memory module. Upload photos to @AKULJARVIS_BOT on Telegram to save or identify faces. Use list_faces to see remembered profiles.",
         "parameters": {
@@ -1135,6 +1153,20 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+
+        # Background evaluate emotional attunement on text command
+        def _eval_text_spectrum(u_txt, ui_handle):
+            try:
+                eng = get_emotional_spectrum()
+                new_st = eng.evaluate_turn(u_txt)
+                if new_st:
+                    meta = eng.get_state_metadata(new_st)
+                    ui_handle.set_emotion(new_st, meta["aura_color"])
+                    ui_handle.write_log(f"SPECTRUM: Auto-attuned to {new_st} ({meta['tagline']})")
+            except Exception:
+                pass
+        threading.Thread(target=_eval_text_spectrum, args=(text, self.ui), daemon=True).start()
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -1206,10 +1238,13 @@ class JarvisLive:
         )
 
         persona_ctx = get_personality_instruction()
+        spectrum_ctx = get_spectrum_prompt_injection()
 
         parts = [time_ctx]
         if persona_ctx:
             parts.append(persona_ctx)
+        if spectrum_ctx:
+            parts.append(spectrum_ctx)
         if settings_ctx:
             parts.append(settings_ctx)
         if mem_str:
@@ -1434,6 +1469,10 @@ class JarvisLive:
             elif name == "switch_personality":
                 r = await loop.run_in_executor(None, lambda: set_personality(parameters=args, player=self.ui))
                 result = r or "Personality updated."
+
+            elif name == "emotional_spectrum":
+                r = await loop.run_in_executor(None, lambda: handle_emotional_spectrum_tool(parameters=args, player=self.ui))
+                result = r or "Emotional spectrum updated."
 
             elif name == "camera_control":
                 r = await loop.run_in_executor(None, lambda: camera_control(parameters=args, player=self.ui))
@@ -1700,6 +1739,23 @@ class JarvisLive:
                                     daemon=True
                                 ).start()
 
+                                def _eval_spectrum(u_txt, j_txt, ui_handle):
+                                    try:
+                                        eng = get_emotional_spectrum()
+                                        new_st = eng.evaluate_turn(u_txt, j_txt)
+                                        if new_st:
+                                            meta = eng.get_state_metadata(new_st)
+                                            ui_handle.set_emotion(new_st, meta["aura_color"])
+                                            ui_handle.write_log(f"SPECTRUM: Auto-attuned to {new_st} ({meta['tagline']})")
+                                    except Exception as ex:
+                                        print(f"[EmotionalSpectrum] Attunement error: {ex}")
+
+                                threading.Thread(
+                                    target=_eval_spectrum,
+                                    args=(full_in, full_out, self.ui),
+                                    daemon=True
+                                ).start()
+
                     if response.tool_call:
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
@@ -1870,6 +1926,15 @@ def main():
     ui = JarvisUI("face.png")
     for r in reports:
         ui.write_log(f"HW: {r}")
+
+    # Initialize emotional spectrum state on UI
+    try:
+        eng = get_emotional_spectrum()
+        meta = eng.get_state_metadata()
+        ui.set_emotion(eng.current_state, meta["aura_color"])
+        ui.write_log(f"SPECTRUM: Initialized to {eng.current_state} ({meta['tagline']}).")
+    except Exception as e:
+        print(f"[EmotionalSpectrum] UI init warning: {e}")
 
     # Launch Mark 58 Autonomous Daemons (Watchdog & File Watcher)
     autonomous_watchdog.start_watchdog(player=ui)
