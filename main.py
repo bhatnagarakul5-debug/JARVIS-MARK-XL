@@ -22,7 +22,7 @@ from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     should_extract_memory, extract_memory
 )
-from core.hardware_optimizer import optimize_hardware
+from core.hardware_optimizer import optimize_hardware, trim_process_memory, start_memory_compactor
 
 from actions.file_processor import file_processor
 from actions.flight_finder     import flight_finder
@@ -82,6 +82,12 @@ from core.emotional_spectrum import (
     get_emotional_spectrum, get_spectrum_prompt_injection,
     handle_emotional_spectrum_tool
 )
+from core.human_reactions import (
+    get_human_reactions_engine, handle_human_reaction_tool
+)
+from core.hardware_equilibrium import (
+    get_hardware_equilibrium_governor, handle_hardware_equilibrium_tool
+)
 from memory.conversation_log   import log_exchange
 
 
@@ -117,7 +123,16 @@ def _get_cached_query(key: str) -> str | None:
     return None
 
 def _set_cached_query(key: str, val: str):
-    _QUERY_CACHE[key] = (time.time(), val)
+    now = time.time()
+    # Prune expired entries to maintain minimal RAM footprint
+    if len(_QUERY_CACHE) >= 50:
+        expired = [k for k, (t, _) in _QUERY_CACHE.items() if now - t >= _CACHE_TTL]
+        for k in expired:
+            _QUERY_CACHE.pop(k, None)
+        if len(_QUERY_CACHE) >= 50:
+            oldest_k = min(_QUERY_CACHE.keys(), key=lambda k: _QUERY_CACHE[k][0])
+            _QUERY_CACHE.pop(oldest_k, None)
+    _QUERY_CACHE[key] = (now, val)
 
 
 def _get_api_key() -> str:
@@ -1134,6 +1149,45 @@ TOOL_DECLARATIONS = [
             "required": ["action"]
         }
     },
+    {
+        "name": "human_reaction",
+        "description": (
+            "Expresses an authentic human physiological or expressive reaction: "
+            "fake cough, sneeze, clearing throat, yawning, dry chuckle, deep sigh, or arched eyebrow gesture. "
+            "Use when the user commands a reaction or to add realistic MCU-style expressiveness to your response."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "reaction": {
+                    "type": "STRING",
+                    "description": "Type of reaction: 'cough', 'sneeze', 'throat_clear', 'yawn', 'eyebrow', 'chuckle', 'sigh', 'blink'"
+                },
+                "comment": {
+                    "type": "STRING",
+                    "description": "Optional speech comment to accompany the reaction"
+                }
+            },
+            "required": ["reaction"]
+        }
+    },
+    {
+        "name": "hardware_equilibrium",
+        "description": (
+            "Monitors, balances, and optimizes system resource equilibrium across CPU, GPU, RAM, VRAM, and Network. "
+            "Use to check system load balance, purge process RAM working set, or throttle loads during heavy usage."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Action to perform: 'status', 'balance', 'trim_memory', 'throttle'"
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 
@@ -1166,7 +1220,7 @@ class JarvisLive:
         if not self._loop or not self.session:
             return
 
-        # Background evaluate emotional attunement on text command
+        # Background evaluate emotional attunement & contextual reactions on text command
         def _eval_text_spectrum(u_txt, ui_handle):
             try:
                 eng = get_emotional_spectrum()
@@ -1175,6 +1229,13 @@ class JarvisLive:
                     meta = eng.get_state_metadata(new_st)
                     ui_handle.set_emotion(new_st, meta["aura_color"])
                     ui_handle.write_log(f"SPECTRUM: Auto-attuned to {new_st} ({meta['tagline']})")
+
+                r_eng = get_human_reactions_engine()
+                react = r_eng.evaluate_contextual_reaction(u_txt)
+                if react:
+                    r_eng.trigger_reaction(react, player=ui_handle)
+
+                trim_process_memory()
             except Exception:
                 pass
         threading.Thread(target=_eval_text_spectrum, args=(text, self.ui), daemon=True).start()
@@ -1251,12 +1312,15 @@ class JarvisLive:
 
         persona_ctx = get_personality_instruction()
         spectrum_ctx = get_spectrum_prompt_injection()
+        reaction_ctx = get_human_reactions_engine().get_prompt_directives()
 
         parts = [time_ctx]
         if persona_ctx:
             parts.append(persona_ctx)
         if spectrum_ctx:
             parts.append(spectrum_ctx)
+        if reaction_ctx:
+            parts.append(reaction_ctx)
         if settings_ctx:
             parts.append(settings_ctx)
         if mem_str:
@@ -1527,6 +1591,14 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: capture_security_footage(parameters=args, player=self.ui))
                 result = r or "Security footage analyzed."
 
+            elif name == "human_reaction":
+                r = await loop.run_in_executor(None, lambda: handle_human_reaction_tool(args, player=self.ui))
+                result = r or "Reaction executed."
+
+            elif name == "hardware_equilibrium":
+                r = await loop.run_in_executor(None, lambda: handle_hardware_equilibrium_tool(args, player=self.ui))
+                result = r or "Hardware equilibrium managed."
+
             elif name == "voice_macros":
                 r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))
                 result = r or "Voice macro executed."
@@ -1764,8 +1836,16 @@ class JarvisLive:
                                             meta = eng.get_state_metadata(new_st)
                                             ui_handle.set_emotion(new_st, meta["aura_color"])
                                             ui_handle.write_log(f"SPECTRUM: Auto-attuned to {new_st} ({meta['tagline']})")
+
+                                        r_eng = get_human_reactions_engine()
+                                        react = r_eng.evaluate_contextual_reaction(u_txt)
+                                        if react:
+                                            r_eng.trigger_reaction(react, player=ui_handle)
+
+                                        # Keep memory footprint ultra-lean
+                                        trim_process_memory()
                                     except Exception as ex:
-                                        print(f"[EmotionalSpectrum] Attunement error: {ex}")
+                                        print(f"[EmotionalSpectrum] Attunement notice: {ex}")
 
                                 threading.Thread(
                                     target=_eval_spectrum,
@@ -1953,9 +2033,11 @@ def main():
     except Exception as e:
         print(f"[EmotionalSpectrum] UI init warning: {e}")
 
-    # Launch Mark 58 Autonomous Daemons (Watchdog & File Watcher)
+    # Launch Mark 58 Autonomous Daemons (Watchdog, File Watcher, Hardware Equilibrium & RAM Compactor)
     autonomous_watchdog.start_watchdog(player=ui)
     smart_file_watcher.start_watcher(player=ui)
+    get_hardware_equilibrium_governor().start_governor(player=ui)
+    start_memory_compactor(interval=30.0, threshold_mb=180.0, player=ui)
 
     def runner():
         ui.wait_for_api_key()

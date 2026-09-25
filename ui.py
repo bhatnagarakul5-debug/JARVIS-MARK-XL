@@ -349,9 +349,29 @@ class HudCanvas(QWidget):
         self._face_px: QPixmap | None = None
         self._load_face(face_path)
 
+        # Human Gestures & Dynamic Framerate Throttling
+        self._gesture_name: str | None = None
+        self._gesture_tick: int = 0
+        self._gesture_offset_y: float = 0.0
+        self._gesture_tilt_deg: float = 0.0
+        self._gesture_scale_mod: float = 1.0
+        self._fps: int = 60
+
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._tmr.start(16)
+
+    def set_fps(self, fps: int):
+        """Dynamically adjusts HUD render interval for hardware equilibrium & thermal management."""
+        fps = max(10, min(60, fps))
+        self._fps = fps
+        self._tmr.setInterval(int(1000 / fps))
+
+    def trigger_gesture(self, gesture_name: str):
+        """Initiates a physical human-like reaction gesture on the HUD canvas."""
+        self._gesture_name = gesture_name.lower().strip()
+        self._gesture_tick = 0
+
 
     def _load_face(self, path: str):
         try:
@@ -426,6 +446,89 @@ class HudCanvas(QWidget):
         for i in range(3):
             self._current_aura_rgb[i] += (self._target_aura_rgb[i] - self._current_aura_rgb[i]) * 0.12
 
+        # Process human gesture animation physics
+        if self._gesture_name:
+            self._gesture_tick += 1
+            t = self._gesture_tick
+            g = self._gesture_name
+
+            if g == "sneeze":
+                if t <= 6:
+                    # Inward compression tensing
+                    self._gesture_scale_mod = 1.0 - (t / 6.0) * 0.16
+                    self._gesture_offset_y = -(t * 0.9)
+                elif t == 7:
+                    # Explosive sneeze burst!
+                    self._gesture_scale_mod = 1.34
+                    self._gesture_offset_y = 9.0
+                    p_cx, p_cy = self.width() / 2, self.height() / 2
+                    for _ in range(16):
+                        ang = random.uniform(0, 2 * math.pi)
+                        spd = random.uniform(2.5, 6.0)
+                        self._particles.append([
+                            p_cx, p_cy,
+                            math.cos(ang) * spd, math.sin(ang) * spd,
+                            1.2
+                        ])
+                elif t <= 22:
+                    prog = (t - 7) / 15.0
+                    damp = math.exp(-3.0 * prog) * math.cos(prog * math.pi * 3)
+                    self._gesture_scale_mod = 1.0 + 0.34 * damp
+                    self._gesture_offset_y = 9.0 * damp
+                else:
+                    self._gesture_scale_mod = 1.0
+                    self._gesture_offset_y = 0.0
+                    self._gesture_name = None
+
+            elif g in ("cough", "throat_clear"):
+                if t <= 4:
+                    self._gesture_offset_y = 5.0 * (t / 4.0)
+                elif t <= 8:
+                    self._gesture_offset_y = -3.0 * ((8 - t) / 4.0)
+                elif t <= 12:
+                    self._gesture_offset_y = 3.5 * ((t - 8) / 4.0)
+                elif t <= 16:
+                    self._gesture_offset_y = -1.5 * ((16 - t) / 4.0)
+                else:
+                    self._gesture_offset_y = 0.0
+                    self._gesture_name = None
+
+            elif g in ("eyebrow", "smirk"):
+                if t <= 6:
+                    self._gesture_tilt_deg = 14.0 * (t / 6.0)
+                elif t <= 20:
+                    self._gesture_tilt_deg = 14.0
+                elif t <= 28:
+                    self._gesture_tilt_deg = 14.0 * (1.0 - (t - 20) / 8.0)
+                else:
+                    self._gesture_tilt_deg = 0.0
+                    self._gesture_name = None
+
+            elif g in ("yawn", "sigh"):
+                if t <= 18:
+                    self._gesture_scale_mod = 1.0 + 0.14 * (t / 18.0)
+                elif t <= 36:
+                    self._gesture_scale_mod = 1.14 - 0.14 * ((t - 18) / 18.0)
+                else:
+                    self._gesture_scale_mod = 1.0
+                    self._gesture_name = None
+
+            elif g == "blink":
+                if t <= 5:
+                    self._gesture_scale_mod = 1.0 - 0.35 * (t / 5.0)
+                elif t <= 10:
+                    self._gesture_scale_mod = 0.65 + 0.35 * ((t - 5) / 5.0)
+                else:
+                    self._gesture_scale_mod = 1.0
+                    self._gesture_name = None
+
+            elif g == "chuckle":
+                if t <= 18:
+                    self._gesture_offset_y = math.sin(t * 1.8) * 2.5
+                else:
+                    self._gesture_offset_y = 0.0
+                    self._gesture_name = None
+
         self.update()
 
     def get_aura_color(self, alpha: int = 255) -> QColor:
@@ -463,8 +566,16 @@ class HudCanvas(QWidget):
         p.fillRect(self.rect(), qcol(C.BG))
 
         W, H = self.width(), self.height()
-        cx, cy = W / 2, H / 2
+        cx, cy = W / 2, (H / 2) + self._gesture_offset_y
         fw = min(W, H)
+        eff_scale = self._scale * self._gesture_scale_mod
+
+        has_tilt = (self._gesture_tilt_deg != 0.0)
+        if has_tilt:
+            p.save()
+            p.translate(cx, cy)
+            p.rotate(self._gesture_tilt_deg)
+            p.translate(-cx, -cy)
 
         # grid dots
         p.setPen(QPen(qcol(C.PRI_GHO), 1))
@@ -547,7 +658,7 @@ class HudCanvas(QWidget):
 
         # face
         if self._face_px:
-            fsz    = int(fw * 0.62 * self._scale)
+            fsz    = int(fw * 0.62 * eff_scale)
             scaled = self._face_px.scaled(
                 fsz, fsz,
                 Qt.AspectRatioMode.KeepAspectRatio,
@@ -555,7 +666,7 @@ class HudCanvas(QWidget):
             )
             p.drawPixmap(int(cx - fsz / 2), int(cy - fsz / 2), scaled)
         else:
-            orb_r = int(fw * 0.27 * self._scale)
+            orb_r = int(fw * 0.27 * eff_scale)
             if self.muted:
                 oc = (200, 0, 50)
             else:
@@ -632,11 +743,15 @@ class HudCanvas(QWidget):
                 p.setBrush(QBrush(qcol(C.WHITE if self.speaking else C.PRI)))
                 p.drawEllipse(QPointF(wx0 + i * bw + (bw - 2) / 2, peak_y), 1.5, 1.5)
 
-        # Emotional Spectrum Telemetry Indicator
+        # Emotional Spectrum & Gesture Telemetry Indicators
         badge_y = wy + 42
         p.setPen(QPen(self.get_aura_color(180), 1))
         p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
-        p.drawText(QRectF(0, badge_y, W, 20), Qt.AlignmentFlag.AlignCenter, f"◆ SPECTRUM: {self.emotion}")
+        gesture_suffix = f" | GESTURE: {self._gesture_name.upper()}" if self._gesture_name else ""
+        p.drawText(QRectF(0, badge_y, W, 20), Qt.AlignmentFlag.AlignCenter, f"◆ SPECTRUM: {self.emotion}{gesture_suffix}")
+
+        if has_tilt:
+            p.restore()
 
 class MetricBar(QWidget):
 
@@ -1531,6 +1646,8 @@ class MainWindow(QMainWindow):
     _cam_frame_sig = pyqtSignal(object)
     _model_sig = pyqtSignal(str)
     _emotion_sig = pyqtSignal(str, str)
+    _gesture_sig = pyqtSignal(str)
+    _fps_throttle_sig = pyqtSignal(int)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -1591,6 +1708,8 @@ class MainWindow(QMainWindow):
         self._notif_sig.connect(self._add_notification)
         self._cam_frame_sig.connect(self._cam_widget.update_frame)
         self._emotion_sig.connect(self._apply_emotion)
+        self._gesture_sig.connect(self.hud.trigger_gesture)
+        self._fps_throttle_sig.connect(self.hud.set_fps)
 
         self._overlay: SetupOverlay | None = None
         self._settings_overlay: SettingsOverlay | None = None
@@ -2249,6 +2368,12 @@ class MainWindow(QMainWindow):
     def set_emotion(self, state: str, color_hex: str = ""):
         self._emotion_sig.emit(state, color_hex)
 
+    def trigger_gesture(self, gesture: str):
+        self._gesture_sig.emit(gesture)
+
+    def set_hud_fps(self, fps: int):
+        self._fps_throttle_sig.emit(fps)
+
     def _check_config(self) -> bool:
         if not API_FILE.exists(): return False
         try:
@@ -2446,6 +2571,12 @@ class JarvisUI:
 
     def set_emotion(self, state: str, color_hex: str = ""):
         self._win._emotion_sig.emit(state, color_hex)
+
+    def trigger_gesture(self, gesture: str):
+        self._win.trigger_gesture(gesture)
+
+    def set_hud_fps(self, fps: int):
+        self._win.set_hud_fps(fps)
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)

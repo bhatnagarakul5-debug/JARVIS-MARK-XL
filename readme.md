@@ -66,6 +66,26 @@
 - **Automated Mobile Dispatch**: Automatically logs snapshots to `memory/security_snapshots/` and broadcasts immediate photo alerts with visual commentary to your phone via **Telegram (`@AKULJARVIS_BOT`)**.
 - **Voice Triggering**: Simply command *"JARVIS, take security footage"*, *"Check the camera feed"*, or *"Run a perimeter sweep"*.
 
+### 🧬 11. Human Reactions & Dynamic Holographic HUD Gestures
+- **Realistic Vocal Micro-Reactions**: Authentically simulates subtle human physiological reactions during conversation:
+  - **Fake Cough & Throat Clearing** (*ahem*, *coughs softly*): Signals polite skepticism, breaks awkward silences, or dryly highlights a human blunder.
+  - **Sneezing** (*achoo!* ...Excuse me, sir): Spontaneous or triggered reactions when dealing with dusty directories or abrupt inputs.
+  - **Late-Night Yawns** (*yawns quietly*): Expressed during marathon 2 AM–5 AM coding sessions under `VIGILANT` mode.
+  - **Arched Eyebrow, Dry Chuckles & Deep Sighs**: Dynamic expressions that give JARVIS authentic MCU British charm and presence.
+- **Physical HUD Holographic Gestures**: Every reaction triggers synchronized physical motion on the PyQt6 HUD:
+  - *Sneeze*: Inward tension compression followed by an explosive radial burst with 16-particle dispersal and elastic rebound.
+  - *Cough*: Rapid double-vertical shudder and pulse ring jitter.
+  - *Eyebrow Raise*: Asymmetric reticle rotation tilting the upper HUD quadrant by +14°.
+  - *Yawn & Sigh*: Expansive deep-breathing halo pulse.
+
+### ⚖️ 12. Hardware Equilibrium & Overload Governor
+- **Full-Spectrum Output Balancing**: Continuously monitors and balances system load across **CPU, GPU, RAM, VRAM, and Network**.
+- **Anti-Overload Load Shedding**: If the system gets heavily loaded by gaming, DaVinci rendering, or heavy multitasking, JARVIS automatically adapts so he never freezes, drops audio, or starves user apps:
+  - **Dynamic FPS Throttling**: Scales HUD rendering from 60 FPS $\to$ 45 FPS $\to$ 30 FPS $\to$ 15 FPS based on real-time load.
+  - **Ultra-Low RAM Footprint**: Automatically compacts working set memory via Windows `psapi.dll` (`EmptyWorkingSet`), keeping private RAM usage down to mere tens of megabytes.
+  - **GPU Offloading Fallback**: Switches heavy computer vision tasks from GPU to lightweight downsampled CPU threads when GPU/VRAM exceeds 80%.
+  - **Voice & Tool Control**: Query or balance load anytime via `hardware_equilibrium` (e.g. *"JARVIS, balance hardware"*, *"clean RAM memory"*, *"how are resources balanced?"*).
+
 ---
 
 ## ⚙️ Installation & 1-Click Setup
