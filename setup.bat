@@ -51,7 +51,7 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /
 echo.
 echo [3/4] Creating Isolated Virtual Environment (venv)...
 if not exist "venv" (
-    %PYCMD% -m venv venv
+    %PYCMD% -m venv --system-site-packages venv
     if %errorlevel% neq 0 (
         echo [ERROR] Could not create virtual environment.
         pause
