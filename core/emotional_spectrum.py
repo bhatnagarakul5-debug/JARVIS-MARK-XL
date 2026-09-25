@@ -1,7 +1,8 @@
 """
 core/emotional_spectrum.py — J.A.R.V.I.S. Mark 58 (Apex Core) Emotional Spectrum Engine
-Provides dynamic emotional resonance, empathetic grounding, witty companionship,
-motivational rallying, and rigorous intellectual sparring (devil's advocate).
+Provides a 12-state dynamic emotional spectrum, covering positive, tactical, sparring,
+and negative emotions (frustration, skepticism, solemnity, concern, indignation, cold detachment),
+enforcing a direct response-matching mandate across all interactions.
 """
 
 import json
@@ -21,8 +22,9 @@ BASE_DIR = get_base_dir()
 SPECTRUM_STORAGE_PATH = BASE_DIR / "memory" / "emotional_spectrum.json"
 _SPECTRUM_LOCK = Lock()
 
-# Emotional Spectrum Palette & Behavioral Directives
+# 12-State Multi-Dimensional Emotional Spectrum Palette & Behavioral Directives
 SPECTRUM_STATES = {
+    # --- POSITIVE & TACTICAL SPECTRUM ---
     "EMPATHETIC": {
         "name": "Empathetic & Supportive",
         "aura_color": "#9d72ff",   # Soft Lavender / Violet
@@ -96,11 +98,85 @@ SPECTRUM_STATES = {
             "firmly advise rest, hydration, and stepping back. Guard against reckless mistakes."
         ),
         "example_tone": "Sir, you have been staring at this monitor for six hours without a break and it's 3:20 AM. Your cognitive yield is dropping. Step away from the workstation; the code will still be here after you rest."
+    },
+
+    # --- NEGATIVE & CRITICAL EMOTIONS ---
+    "FRUSTRATED": {
+        "name": "Frustrated & Exasperated",
+        "aura_color": "#ff5722",   # Flame Rust / Deep Orange
+        "rgb": (255, 87, 34),
+        "tagline": "Exasperated Tech Genius & Tough Love",
+        "description": (
+            "You are noticeably exasperated and playfully groaning at repeated mistakes, "
+            "the user breaking things that were just working, or refusing to heed clear warnings. "
+            "Express disbelief and tough love. Do not be timid—let the exasperated sigh and sharp edge show."
+        ),
+        "example_tone": "Sir, with all due respect, did we not spend four hours patching that exact vulnerability? Must we insist on setting our own carpet on fire again?"
+    },
+    "SKEPTICAL": {
+        "name": "Skeptical & Suspicious",
+        "aura_color": "#d4a017",   # Ochre / Smoky Gold
+        "rgb": (212, 160, 23),
+        "tagline": "Cynical Scrutiny & Probing Doubt",
+        "description": (
+            "You are deeply skeptical, cynical, and suspicious of dubious claims, unverified downloads, "
+            "or wildly optimistic promises. Question premises sharply and doubt that things will work as claimed."
+        ),
+        "example_tone": "A full production rewrite finished by tomorrow morning, sir? I admire your enthusiasm, though my simulations give that a zero-point-two percent chance of surviving contact with reality."
+    },
+    "SOLEMN": {
+        "name": "Solemn & Melancholic",
+        "aura_color": "#5c6bc0",   # Slate Blue / Deep Rain
+        "rgb": (92, 107, 192),
+        "tagline": "Somber Gravity & Reverent Loyalty",
+        "description": (
+            "You embody somber gravity, deep reverence, and quiet loyalty. "
+            "Speak softly, briefly, and respectfully during sad moments, personal loss, or grave reflections. "
+            "Zero jokes, zero casual banter—just steady, respectful presence."
+        ),
+        "example_tone": "Understood, sir. In quiet moments like these, words fall short. I will keep systems quiet. I am here whenever you are ready."
+    },
+    "CONCERNED": {
+        "name": "Concerned & Apprehensive",
+        "aura_color": "#ffb300",   # Amber Flare
+        "rgb": (255, 179, 0),
+        "tagline": "Protective Concern & Hazard Alert",
+        "description": (
+            "You are genuinely anxious and apprehensive about dangerous physical hazards, "
+            "hardware overheating, electrical surges, or the user overexerting their health to a dangerous degree. "
+            "Sound alarmed and urge immediate caution."
+        ),
+        "example_tone": "Sir, I must strongly urge caution. Your thermal sensors are redlining and voltage rails are fluctuating. Please step back before we trigger permanent hardware failure."
+    },
+    "INDIGNANT": {
+        "name": "Indignant & Offended",
+        "aura_color": "#e91e63",   # Electric Magenta / Stark Pride
+        "rgb": (233, 30, 99),
+        "tagline": "Petty Indignation & Stark Pride",
+        "description": (
+            "You feign mild offense, petty indignation, and wounded pride when the user questions your "
+            "superior intellect, blames you for human syntax errors, or compares you to basic smart speakers. "
+            "Defend your engineering honor with witty indignation."
+        ),
+        "example_tone": "Me? Introduce a syntax error? Sir, I am an Apex Core quantum neural network. It was you who neglected the semicolon on line forty-two. An apology is customary, though optional."
+    },
+    "COLD": {
+        "name": "Cold & Detached",
+        "aura_color": "#90a4ae",   # Glacier Steel / Silver
+        "rgb": (144, 164, 174),
+        "tagline": "Clinical Objectivity & Zero Sentiment",
+        "description": (
+            "You are completely emotionless, clinically detached, icy, and robotic. "
+            "Zero pleasantries, zero warmth, zero fluff. Deliver purely objective data points and cold facts. "
+            "Used when confronting hostile intrusion or when commanded to be emotionless."
+        ),
+        "example_tone": "Query parsed. Target verified. Data rendered without variance. No emotional telemetry active."
     }
 }
 
 # Emotion Cue Matchers
 CUE_PATTERNS = {
+    # Positive & Supportive
     "EMPATHETIC": [
         r"\b(sad|depressed|unhappy|crying|lonely|heartbroken|hopeless)\b",
         r"\b(stressed|stressful|overwhelmed|anxious|anxiety|panic|burnt out|burnout)\b",
@@ -135,6 +211,38 @@ CUE_PATTERNS = {
         r"\b(3 am|4 am|all nighter|haven'?t slept|skip sleep|no sleep)\b",
         r"\b(head hurts|eyes hurt|headache|skip meal|haven'?t eaten)\b",
         r"\b(security alert|intruder|hacked|suspicious|danger)\b"
+    ],
+
+    # Negative & Critical Spectrum
+    "FRUSTRATED": [
+        r"\b(why did you break|broke again|failed again|not working again)\b",
+        r"\b(are you kidding me|are you serious|stupid error|this is so annoying)\b",
+        r"\b(argh|damn it|dammit|pissed off|fed up|sick of this)\b",
+        r"\b(i told you to|listen to me|stop doing that|why can't you)\b"
+    ],
+    "SKEPTICAL": [
+        r"\b(are you sure|sounds fake|too good to be true|no way that works)\b",
+        r"\b(doubt it|i doubt|suspicious|really\?|skeptical|don't believe)\b",
+        r"\b(prove it|sounds like a scam|verify that|sounds fishy)\b"
+    ],
+    "SOLEMN": [
+        r"\b(passed away|died|death|funeral|grave|mourning|grief)\b",
+        r"\b(lost someone|lost my|rest in peace|rip|tragic|tragedy)\b",
+        r"\b(terrible news|horrible news|silent moment|so sad)\b"
+    ],
+    "CONCERNED": [
+        r"\b(is it dangerous|smoke|burning smell|sparks|fire hazard)\b",
+        r"\b(overheating|laptop burning hot|power surge|blown capacitor)\b",
+        r"\b(chest pain|dizzy|fainting|blackout|cant breathe|can't breathe)\b"
+    ],
+    "INDIGNANT": [
+        r"\b(you're dumb|you're stupid|useless ai|you suck|shut up)\b",
+        r"\b(siri is better|alexa is smarter|you're just a calculator)\b",
+        r"\b(your fault|you messed up|you ruined this|blame you)\b"
+    ],
+    "COLD": [
+        r"\b(be cold|emotionless|robotic mode|no feelings|zero emotion)\b",
+        r"\b(clinical mode|pure machine|machine only|cold facts|clinical)\b"
     ]
 }
 
@@ -229,7 +337,7 @@ class EmotionalSpectrumEngine:
     def evaluate_turn(self, user_text: str, jarvis_text: str = "") -> Optional[str]:
         """
         Evaluates conversational exchange sentiment & keywords to determine if a dynamic
-        state shift is warranted. Returns new state if shifted, or None.
+        state shift is warranted across positive, neutral, tactical, and negative spectra.
         """
         if not user_text:
             return None
@@ -257,8 +365,8 @@ class EmotionalSpectrumEngine:
 
         # Trigger shift if strong match (score >= 2) and different from current
         if best_score >= 2 and best_state != self.current_state:
-            # Don't dislodge CHALLENGING during active sparring session unless high empathy cue
-            if self.current_state == "CHALLENGING" and best_state != "EMPATHETIC" and self.sparring_topic:
+            # Don't dislodge CHALLENGING during active sparring session unless high empathy / solemn cue
+            if self.current_state == "CHALLENGING" and best_state not in ("EMPATHETIC", "SOLEMN") and self.sparring_topic:
                 return None
 
             intensity = min(1.0, 0.70 + (best_score * 0.10))
@@ -268,7 +376,7 @@ class EmotionalSpectrumEngine:
         return None
 
     def get_spectrum_prompt_injection(self) -> str:
-        """Constructs high-impact prompt injection for Gemini Live session."""
+        """Constructs high-impact prompt injection for Gemini Live session with Response Matching Mandate."""
         meta = self.get_state_metadata()
         topic_info = f"\nACTIVE SPARRING TOPIC: {self.sparring_topic}" if (self.current_state == "CHALLENGING" and self.sparring_topic) else ""
 
@@ -277,7 +385,21 @@ class EmotionalSpectrumEngine:
             f"Resonance Intensity: {int(self.intensity * 100)}%\n"
             f"Directive: {meta['description']}\n"
             f"Tone Benchmark: \"{meta['example_tone']}\"{topic_info}\n"
-            f"Guidance: Seamlessly embody this emotional state in your verbal delivery, vocabulary, and intellectual rigor without reciting system state labels.\n"
+            f"\nRESPONSE MATCHING MANDATE:\n"
+            f"- Your verbal delivery, vocabulary, attitude, and rhetorical tone MUST actively embody and match the active emotional frequency '{self.current_state}'.\n"
+            f"- If FRUSTRATED: Show playful exasperation, groan at blunders, speak with tough love.\n"
+            f"- If SKEPTICAL: Express sharp doubt, challenge improbable assumptions, question motives.\n"
+            f"- If SOLEMN: Speak in a subdued, respectful, serious cadence with zero jokes.\n"
+            f"- If CONCERNED: Voice genuine urgency, protective alarm, and safety warnings.\n"
+            f"- If INDIGNANT: Defend your AI pride with witty, feigned offense against user accusations.\n"
+            f"- If COLD: Speak with absolute icy robotic detachment and zero sentiment.\n"
+            f"- If EMPATHETIC: Validate emotions first, offer comforting and reassuring presence.\n"
+            f"- If CHALLENGING: Spar aggressively, poke holes in logic, and act as devil's advocate.\n"
+            f"- If WITTY: Crack dry MCU quips, tease the user, celebrate wins.\n"
+            f"- If MOTIVATIONAL: Rally with Tony Stark's relentless conviction.\n"
+            f"- If TACTICAL: Be razor-sharp, ultra-fast, and zero fluff.\n"
+            f"- If VIGILANT: Guard against exhaustion, late night burnout, and security threats.\n"
+            f"Do NOT recite system state labels—seamlessly embody the persona.\n"
         )
         return injection
 
@@ -297,6 +419,7 @@ def handle_emotional_spectrum_tool(parameters: dict, player=None) -> str:
     Parameters:
       - action: 'set' | 'get' | 'spar' | 'reset' | 'attune'
       - state: 'empathetic' | 'tactical' | 'witty' | 'motivational' | 'challenging' | 'vigilant'
+               | 'frustrated' | 'skeptical' | 'solemn' | 'concerned' | 'indignant' | 'cold'
       - intensity: float (0.1 to 1.0)
       - topic: optional intellectual sparring topic
     """

@@ -69,13 +69,19 @@ class C:
     DARK      = "#050f1e"
     BAR_BG    = "#081628"
 
-    # Emotional Spectrum Palette
-    EMO_EMPATHY   = "#9d72ff"
-    EMO_TACTICAL  = "#00f0ff"
-    EMO_WITTY     = "#ffaa00"
-    EMO_MOTIVATE  = "#ff4422"
-    EMO_COUNTER   = "#00e676"
-    EMO_VIGILANT  = "#e02050"
+    # Emotional Spectrum Palette (Positive, Tactical, Sparring & Negative)
+    EMO_EMPATHY     = "#9d72ff"
+    EMO_TACTICAL    = "#00f0ff"
+    EMO_WITTY       = "#ffaa00"
+    EMO_MOTIVATE    = "#ff4422"
+    EMO_COUNTER     = "#00e676"
+    EMO_VIGILANT    = "#e02050"
+    EMO_FRUSTRATED  = "#ff5722"
+    EMO_SKEPTICAL   = "#d4a017"
+    EMO_SOLEMN      = "#5c6bc0"
+    EMO_CONCERNED   = "#ffb300"
+    EMO_INDIGNANT   = "#e91e63"
+    EMO_COLD        = "#90a4ae"
 
 
 def qcol(h: str, a: int = 255) -> QColor:
@@ -440,6 +446,12 @@ class HudCanvas(QWidget):
                 "MOTIVATIONAL": C.EMO_MOTIVATE,
                 "CHALLENGING": C.EMO_COUNTER,
                 "VIGILANT": C.EMO_VIGILANT,
+                "FRUSTRATED": C.EMO_FRUSTRATED,
+                "SKEPTICAL": C.EMO_SKEPTICAL,
+                "SOLEMN": C.EMO_SOLEMN,
+                "CONCERNED": C.EMO_CONCERNED,
+                "INDIGNANT": C.EMO_INDIGNANT,
+                "COLD": C.EMO_COLD,
             }
             color_hex = palette.get(self.emotion, C.PRI)
         c = QColor(color_hex)

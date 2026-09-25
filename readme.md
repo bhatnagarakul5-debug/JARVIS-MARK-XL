@@ -51,12 +51,20 @@
 - **Spotify Voice DJ**: Controls playback, volume, and matches curated playlists to your mood (`war_mode`, `coding`, `chill`, `workout`, `focus`).
 - **DaVinci Resolve AI Editor**: Performs cuts, marker placements, page switches, beat-sync editing, and auto-color grading.
 
-### 🎭 9. Emotional Spectrum & Intellectual Sparring Engine
-- **6 Multi-Dimensional States**: Dynamically shifts between `EMPATHETIC`, `TACTICAL`, `WITTY`, `MOTIVATIONAL`, `CHALLENGING`, and `VIGILANT`.
-- **Intellectual Sparring & Devil's Advocate**: Rigorously probes flawed assumptions, stress-tests software architectures, and challenges premises with facts.
-- **Empathetic Grounding**: Detects stress, burnout, and fatigue; validates feelings and offers steadfast emotional support before jumping to solutions.
-- **Holographic HUD Aura Resonance**: Real-time PyQt6 HUD halo glow, pulse rings, and telemetry badges dynamically match active emotional resonance.
-- **Voice & Tool Control**: Adjust or query state anytime via `emotional_spectrum` tool (e.g. *"JARVIS, play devil's advocate"*, *"be more empathetic"*, *"motivate me"*).
+### 🎭 9. 12-State Emotional Spectrum & Dynamic Response Matching
+- **12 Multi-Dimensional States**: Dynamically shifts across both constructive and critical emotional frequencies:
+  - **Constructive / Operational**: `EMPATHETIC` (Warm Cyan), `TACTICAL` (Electric Cyan), `WITTY` (Emerald Gold), `MOTIVATIONAL` (Amber Orange), `CHALLENGING` (Violet/Devil's Advocate), `VIGILANT` (Crimson Defense).
+  - **Critical / Negative Emotions**: `FRUSTRATED` (Deep Orange-Red), `SKEPTICAL` (Tarnished Gold), `SOLEMN` (Muted Indigo), `CONCERNED` (Urgent Amber), `INDIGNANT` (Electric Pink), `COLD` (Slate Grey).
+- **Direct Response Matching Mandate**: JARVIS's verbal responses, attitude, cadence, and banter strictly match the active emotional frequency. If frustrated, he calls out blunders sharply; if skeptical, he questions logic; if solemn, he delivers respectful, quiet gravity.
+- **Intellectual Sparring & Devil's Advocate**: Rigorously probes flawed assumptions, stress-tests software architectures, and challenges premises with hard facts.
+- **Holographic HUD Aura Resonance**: Real-time PyQt6 HUD halo glow, pulse rings, and telemetry badges dynamically interpolate colors to match active emotional resonance.
+- **Voice & Tool Control**: Adjust or query state anytime via `emotional_spectrum` tool (e.g. *"JARVIS, be skeptical of this plan"*, *"play devil's advocate"*, *"be more empathetic"*).
+
+### 📸 10. AI Security Footage & Multimodal Vision Commentary
+- **Multi-Source Capture**: Captures instant visual telemetry from the laptop webcam or active desktop workspace with graceful fallback to radar sweep sensors.
+- **Multimodal Gemini Vision Analysis**: Evaluates what he sees in real-time using Gemini Vision and delivers witty, serious, or fun observational comments via AI speech synthesis.
+- **Automated Mobile Dispatch**: Automatically logs snapshots to `memory/security_snapshots/` and broadcasts immediate photo alerts with visual commentary to your phone via **Telegram (`@AKULJARVIS_BOT`)**.
+- **Voice Triggering**: Simply command *"JARVIS, take security footage"*, *"Check the camera feed"*, or *"Run a perimeter sweep"*.
 
 ---
 

@@ -258,5 +258,8 @@ def security_shield_control(parameters: dict, player=None) -> str:
         return trigger_intruder_lock(intruder_name=target, player=player)
     elif action in ("scan_network", "network", "scan"):
         return scan_local_network(player=player)
+    elif action in ("footage", "security_footage", "camera_feed", "check_camera", "camera"):
+        from actions.security_footage import capture_security_footage
+        return capture_security_footage(parameters=params, player=player)
 
     return security_shield_control({"action": "sentry"}, player=player)

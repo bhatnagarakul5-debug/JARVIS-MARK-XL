@@ -924,12 +924,24 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "security_shield",
-        "description": "Stark Cyber Security Shield. Locks Windows on intruder detection, sends snapshot alerts, and performs local network scans.",
+        "description": "Stark Cyber Security Shield. Locks Windows on intruder detection, sends snapshot alerts, performs local network scans, and accesses security footage.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING", "description": "lock | scan_network | intruder_check"},
+                "action": {"type": "STRING", "description": "lock | scan_network | intruder_check | footage"},
                 "target": {"type": "STRING", "description": "Target intruder or IP"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "security_footage",
+        "description": "Takes security camera footage (or workstation screen) and analyzes the visual feed with Gemini Multimodal Vision to deliver witty, serious, or fun commentary on what is seen. Use whenever user asks to check security cameras, see what the camera sees, take security footage, or pass comments on the room/surroundings.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "source": {"type": "STRING", "description": "camera | screen | auto (default: auto)"},
+                "mode": {"type": "STRING", "description": "auto | witty | serious | fun (default: auto)"}
             },
             "required": []
         }
@@ -1509,6 +1521,11 @@ class JarvisLive:
             elif name == "security_shield":
                 r = await loop.run_in_executor(None, lambda: security_shield_control(parameters=args, player=self.ui))
                 result = r or "Security shield action complete."
+
+            elif name == "security_footage":
+                from actions.security_footage import capture_security_footage
+                r = await loop.run_in_executor(None, lambda: capture_security_footage(parameters=args, player=self.ui))
+                result = r or "Security footage analyzed."
 
             elif name == "voice_macros":
                 r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))

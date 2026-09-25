@@ -24,6 +24,8 @@ chroma_db/
 # 3. User Face Profile Photos & Uploaded Media
 config/known_faces/
 config/known_faces/*
+memory/security_snapshots/
+memory/security_snapshots/*
 scratch/
 scratch/*
 
