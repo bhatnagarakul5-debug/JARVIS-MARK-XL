@@ -95,6 +95,11 @@ from actions.deep_research import deep_research
 from actions.college_hub import college_hub
 from actions.presentation_designer import presentation_designer
 from memory.conversation_log   import log_exchange
+from core.server_security import (
+    is_system_locked, trigger_protocol_blackout,
+    unlock_protocol_blackout, PromptInjectionShield,
+    get_destructive_action_guard
+)
 
 
 def get_base_dir():
@@ -1431,6 +1436,60 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+
+        cmd_clean = text.strip()
+        cmd_low = cmd_clean.lower()
+
+        # 1. Check if System is Locked under Protocol Blackout
+        if is_system_locked():
+            if cmd_low.startswith("unlock ") or cmd_low.startswith("/unlock "):
+                pkey = cmd_clean.split(" ", 1)[1].strip()
+                ok, msg = unlock_protocol_blackout(pkey, ui_handle=self.ui)
+                self.ui.push_notification(msg, "info" if ok else "warning")
+                self.ui.write_log(f"SECURITY: {msg}")
+                if ok:
+                    self.speak("System unlocked. All consoles restored, sir.")
+                else:
+                    self.speak("Authentication failed. Passkey rejected.")
+            else:
+                self.ui.write_log("SECURITY: Command rejected — Protocol Blackout active.")
+                self.speak("Workstation is locked under Protocol Blackout. Provide authorization passkey to resume.")
+            return
+
+        # 2. Check for Panic Word / Protocol Blackout Activation
+        if any(kw in cmd_low for kw in ["protocol blackout", "protocol zero", "blackout protocol", "clean slate protocol"]):
+            res = trigger_protocol_blackout(ui_handle=self.ui, reason="Local console trigger")
+            self.speak("Protocol Blackout engaged. Clipboard cleared, security shield locked.")
+            return
+
+        # 3. Check for 3-Digit Destructive Confirmation Code
+        if cmd_clean.isdigit() and len(cmd_clean) == 3:
+            guard = get_destructive_action_guard()
+            ok, res_action, msg = guard.verify_challenge(cmd_clean)
+            if ok:
+                self.ui.write_log(f"SECURITY: {msg}")
+                self.speak(f"Action confirmed and executed. {res_action or ''}")
+                return
+            elif "No active confirmation" not in msg:
+                self.ui.write_log(f"SECURITY: {msg}")
+                self.speak("Verification code invalid. Destructive action aborted.")
+                return
+
+        # 4. Check for Destructive Action Intent
+        guard = get_destructive_action_guard()
+        if guard.has_destructive_intent(cmd_clean):
+            code, challenge_msg = guard.create_challenge("Console Command", cmd_clean)
+            self.ui.write_log(f"SECURITY CHALLENGE: Code [{code}] issued for command.")
+            self.ui.push_notification(challenge_msg, "warning")
+            self.speak(f"Sir, confirmation is required for this action. Please confirm with verification code {code}.")
+            return
+
+        # 5. Prompt Injection & Document Jailbreak Shield
+        is_safe, sanitized_text, matched = PromptInjectionShield.inspect(cmd_clean, source="local_console")
+        if not is_safe:
+            self.ui.write_log(f"SECURITY: Prompt injection attempt intercepted! Patterns: {matched}")
+            self.ui.push_notification("Adversarial prompt injection pattern neutralized", "warning")
+            text = sanitized_text
 
         # Background evaluate emotional attunement & contextual reactions on text command
         def _eval_text_spectrum(u_txt, ui_handle):

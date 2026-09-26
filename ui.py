@@ -2573,11 +2573,22 @@ class JarvisOpeningScreen(QWidget):
         self._current_step = 0
         self._angle = 0.0
 
+        # Check codebase integrity seal
+        seal_text = "[✔] SHA-256 INTEGRITY SEAL: UNCOMPROMISED"
+        try:
+            from core.server_security import IntegritySeal
+            res = IntegritySeal.verify_integrity()
+            if not res.get("is_valid", True):
+                seal_text = "[!] CODE INTEGRITY WARNING: TAMPER DETECTED"
+        except Exception:
+            pass
+
         self._subsystems = [
-            (0.15, "[✔] NEURAL ENGINE: GEMINI 2.0 / 3.8 FLASH READY"),
-            (0.40, "[✔] STUNT DESKTOP PLATFORM MESH: CONNECTED"),
-            (0.65, "[✔] 16:9 PRESENTATION STUDIO & EXECUTIVE DOCS: LOADED"),
-            (0.85, "[✔] LOCALHOST THREAT SHIELD & SECURITY GOVERNOR: ACTIVE"),
+            (0.12, "[✔] NEURAL ENGINE: GEMINI 2.0 / 3.8 FLASH READY"),
+            (0.30, "[✔] STUNT DESKTOP PLATFORM MESH: CONNECTED"),
+            (0.50, "[✔] 16:9 PRESENTATION STUDIO & EXECUTIVE DOCS: LOADED"),
+            (0.70, "[✔] LOCALHOST THREAT SHIELD & SECURITY GOVERNOR: ACTIVE"),
+            (0.85, seal_text),
         ]
 
         self._timer = QTimer(self)
@@ -2681,20 +2692,21 @@ class JarvisOpeningScreen(QWidget):
         p.setPen(QColor(C.GREEN if not self._on_battery else C.ACC2))
         p.drawText(QRectF(20, 248, self._w - 40, 18), Qt.AlignmentFlag.AlignCenter, self._battery_text)
 
-        # 4. Subsystems Boot Sequence Checklist
+        # 4. Subsystems Boot Sequence Checklist (5 items)
         progress_ratio = min(1.0, self._current_step / float(self._max_steps))
         font_sys = QFont("Segoe UI", 8, QFont.Weight.Bold)
         p.setFont(font_sys)
 
-        start_y = 276
+        start_y = 268
         for thresh, label in self._subsystems:
             if progress_ratio >= thresh:
-                p.setPen(QColor(C.TEXT_MED))
-                p.drawText(QRectF(80, start_y, self._w - 160, 18), Qt.AlignmentFlag.AlignLeft, label)
+                color = C.RED if "TAMPER" in label or "WARNING" in label else C.TEXT_MED
+                p.setPen(QColor(color))
+                p.drawText(QRectF(80, start_y, self._w - 160, 16), Qt.AlignmentFlag.AlignLeft, label)
             else:
                 p.setPen(QColor(C.TEXT_DIM))
-                p.drawText(QRectF(80, start_y, self._w - 160, 18), Qt.AlignmentFlag.AlignLeft, f"[ ] {label[4:]}")
-            start_y += 18
+                p.drawText(QRectF(80, start_y, self._w - 160, 16), Qt.AlignmentFlag.AlignLeft, f"[ ] {label[4:]}")
+            start_y += 17
 
         # 5. Energy-Efficient Progress Bar
         bar_x, bar_y, bar_w, bar_h = 80, 362, self._w - 160, 6

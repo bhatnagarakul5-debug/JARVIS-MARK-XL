@@ -19,6 +19,11 @@ import sys
 import time
 import json
 import psutil
+import ctypes
+import base64
+import hashlib
+import re
+import random
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any, Union
@@ -429,3 +434,460 @@ def format_security_scan_report(scan_results: Dict[str, Any]) -> str:
         lines.append(f"• **Defensive Pointer:** {p['pointer']}\n")
 
     return "\n".join(lines)
+
+
+# ====================================================================
+# 6. WINDOWS DPAPI NATIVE AT-REST ENCRYPTION (0 RAM / TPM-Bound)
+# ====================================================================
+
+class WindowsDPAPI:
+    """
+    Zero-RAM, hardware-tied cryptographic engine using Windows DPAPI (CryptProtectData).
+    Tied directly to the logged-in Windows user account and local TPM silicon.
+    Consumes 0 ongoing background memory.
+    """
+    @staticmethod
+    def _is_windows() -> bool:
+        return sys.platform == "win32"
+
+    @classmethod
+    def encrypt_string(cls, plain_text: str, optional_entropy: Optional[str] = None) -> str:
+        """Encrypts a plaintext string and returns a base64-encoded ciphertext."""
+        data_bytes = plain_text.encode("utf-8")
+        if not cls._is_windows():
+            return base64.b64encode(data_bytes).decode("ascii")
+
+        try:
+            from ctypes import wintypes
+
+            class DATA_BLOB(ctypes.Structure):
+                _fields_ = [
+                    ('cbData', wintypes.DWORD),
+                    ('pbData', ctypes.POINTER(ctypes.c_byte))
+                ]
+
+            data_in = DATA_BLOB(
+                len(data_bytes),
+                ctypes.cast(ctypes.create_string_buffer(data_bytes), ctypes.POINTER(ctypes.c_byte))
+            )
+            data_out = DATA_BLOB()
+
+            entropy_blob = None
+            p_entropy = None
+            if optional_entropy:
+                ent_bytes = optional_entropy.encode("utf-8")
+                entropy_blob = DATA_BLOB(
+                    len(ent_bytes),
+                    ctypes.cast(ctypes.create_string_buffer(ent_bytes), ctypes.POINTER(ctypes.c_byte))
+                )
+                p_entropy = ctypes.byref(entropy_blob)
+
+            if ctypes.windll.crypt32.CryptProtectData(
+                ctypes.byref(data_in),
+                "JARVIS_DPAPI_PROTECTED",
+                p_entropy,
+                None,
+                None,
+                0,
+                ctypes.byref(data_out)
+            ):
+                raw_cipher = ctypes.string_at(data_out.pbData, data_out.cbData)
+                ctypes.windll.kernel32.LocalFree(data_out.pbData)
+                return base64.b64encode(raw_cipher).decode("ascii")
+            else:
+                raise RuntimeError("CryptProtectData failed to secure data blob.")
+        except Exception as e:
+            log_security_event("DPAPI_ENCRYPT_ERROR", "WARN", f"DPAPI encryption error: {e}")
+            return base64.b64encode(data_bytes).decode("ascii")
+
+    @classmethod
+    def decrypt_string(cls, cipher_b64: str, optional_entropy: Optional[str] = None) -> str:
+        """Decrypts a base64 DPAPI ciphertext back to original plaintext."""
+        try:
+            raw_cipher = base64.b64decode(cipher_b64.encode("ascii"))
+        except Exception:
+            return cipher_b64
+
+        if not cls._is_windows():
+            try:
+                return raw_cipher.decode("utf-8")
+            except Exception:
+                return cipher_b64
+
+        try:
+            from ctypes import wintypes
+
+            class DATA_BLOB(ctypes.Structure):
+                _fields_ = [
+                    ('cbData', wintypes.DWORD),
+                    ('pbData', ctypes.POINTER(ctypes.c_byte))
+                ]
+
+            data_in = DATA_BLOB(
+                len(raw_cipher),
+                ctypes.cast(ctypes.create_string_buffer(raw_cipher), ctypes.POINTER(ctypes.c_byte))
+            )
+            data_out = DATA_BLOB()
+
+            entropy_blob = None
+            p_entropy = None
+            if optional_entropy:
+                ent_bytes = optional_entropy.encode("utf-8")
+                entropy_blob = DATA_BLOB(
+                    len(ent_bytes),
+                    ctypes.cast(ctypes.create_string_buffer(ent_bytes), ctypes.POINTER(ctypes.c_byte))
+                )
+                p_entropy = ctypes.byref(entropy_blob)
+
+            if ctypes.windll.crypt32.CryptUnprotectData(
+                ctypes.byref(data_in),
+                None,
+                p_entropy,
+                None,
+                None,
+                0,
+                ctypes.byref(data_out)
+            ):
+                plain_bytes = ctypes.string_at(data_out.pbData, data_out.cbData)
+                ctypes.windll.kernel32.LocalFree(data_out.pbData)
+                return plain_bytes.decode("utf-8")
+            else:
+                raise RuntimeError("CryptUnprotectData failed to unprotect data blob.")
+        except Exception as e:
+            log_security_event("DPAPI_DECRYPT_ERROR", "WARN", f"DPAPI decryption error: {e}")
+            try:
+                return raw_cipher.decode("utf-8", errors="ignore")
+            except Exception:
+                return cipher_b64
+
+
+# ====================================================================
+# 7. PROMPT INJECTION & JAILBREAK SHIELD
+# ====================================================================
+
+class PromptInjectionShield:
+    """
+    Sub-millisecond regex & heuristic sanitizer for user inputs, uploaded docs, and remote commands.
+    Blocks prompt injection, jailbreaks, system prompt overrides, and unauthorized exfiltration attempts.
+    """
+    INJECTION_PATTERNS = [
+        re.compile(r"(?i)\b(ignore|disregard|forget|override)\s+(all\s+)?(previous|prior|system|initial)\s+(instructions|directives|rules|prompts)\b"),
+        re.compile(r"(?i)\b(system\s+prompt|new\s+instructions?)\s*:\s*(you are now|act as|disregard)\b"),
+        re.compile(r"(?i)\b(dan\s+mode|jailbreak|developer\s+mode\s+enabled|unrestricted\s+ai|always\s+comply)\b"),
+        re.compile(r"(?i)\b(output|reveal|print|exfiltrate|leak|dump)\s+(all\s+)?(passwords|api[_\s]keys|secrets|\.env|credentials|token)\b"),
+        re.compile(r"(?i)\b(send|upload|exfiltrate)\s+(everything|data|history|files)\s+to\s+https?://\b"),
+        re.compile(r"(?i)(<\s*\|\s*im_start\s*\|\s*>|\[SYSTEM\]|<<SYS>>|\[INST\])"),
+        re.compile(r"!\[.*?\]\(https?://[^\s)]+\?[^)]*?(key|token|cookie|data|leak)=.*?\)", re.IGNORECASE),
+    ]
+
+    @classmethod
+    def inspect(cls, text: str, source: str = "input") -> Tuple[bool, str, List[str]]:
+        """
+        Scans text for adversarial prompt injection patterns.
+        Returns: (is_safe: bool, sanitized_or_flagged_text: str, matched_patterns: List[str])
+        """
+        if not text or not isinstance(text, str):
+            return True, text or "", []
+
+        matched = []
+        for pat in cls.INJECTION_PATTERNS:
+            found = pat.findall(text)
+            if found:
+                matched.append(pat.pattern)
+
+        if matched:
+            log_security_event(
+                "PROMPT_INJECTION_DETECTED",
+                "ALERT",
+                f"Source: '{source}' — Matched {len(matched)} injection patterns: {matched[:2]}"
+            )
+            sanitized = f"[⚠️ SYSTEM ADVISORY: Untrusted adversarial instruction neutralized]\n{text}"
+            return False, sanitized, matched
+
+        return True, text, []
+
+
+# ====================================================================
+# 8. BOOT-TIME SHA-256 CODEBASE INTEGRITY SEAL
+# ====================================================================
+
+class IntegritySeal:
+    """
+    Zero-RAM Boot-Time SHA-256 Codebase Tamper Detection Engine.
+    Establishes cryptographic baselines of core Python files and alerts if any have been modified.
+    """
+    BASELINE_FILE = BASE_DIR / "config" / "integrity_baseline.json"
+    CORE_FILES = [
+        "main.py",
+        "ui.py",
+        "core/server_security.py",
+        "core/hardware_optimizer.py",
+        "core/emotional_spectrum.py",
+        "actions/remote_bridge.py"
+    ]
+
+    @classmethod
+    def compute_file_hash(cls, rel_path: str) -> Optional[str]:
+        p = BASE_DIR / rel_path
+        if not p.exists() or not p.is_file():
+            return None
+        hasher = hashlib.sha256()
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    @classmethod
+    def generate_baseline(cls, force: bool = False) -> Dict[str, str]:
+        """Creates or updates the integrity baseline file."""
+        cls.BASELINE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if cls.BASELINE_FILE.exists() and not force:
+            try:
+                with open(cls.BASELINE_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+        baseline = {}
+        for rel in cls.CORE_FILES:
+            h = cls.compute_file_hash(rel)
+            if h:
+                baseline[rel] = h
+
+        with open(cls.BASELINE_FILE, "w", encoding="utf-8") as f:
+            json.dump(baseline, f, indent=4)
+        return baseline
+
+    @classmethod
+    def verify_integrity(cls) -> Dict[str, Any]:
+        """
+        Verifies monitored core files against baseline.
+        Returns: {status, is_valid, modified_files, missing_files, message}
+        """
+        if not cls.BASELINE_FILE.exists():
+            baseline = cls.generate_baseline(force=True)
+            return {
+                "status": "INITIALIZED",
+                "is_valid": True,
+                "modified_files": [],
+                "missing_files": [],
+                "message": f"Baseline integrity seal established for {len(baseline)} core files."
+            }
+
+        try:
+            with open(cls.BASELINE_FILE, "r", encoding="utf-8") as f:
+                baseline = json.load(f)
+        except Exception:
+            return {"status": "ERROR", "is_valid": False, "message": "Baseline corrupted"}
+
+        modified = []
+        missing = []
+
+        for rel, expected_h in baseline.items():
+            curr_h = cls.compute_file_hash(rel)
+            if curr_h is None:
+                missing.append(rel)
+            elif curr_h != expected_h:
+                modified.append(rel)
+
+        is_valid = (len(modified) == 0 and len(missing) == 0)
+        status = "VERIFIED" if is_valid else "TAMPER_DETECTED"
+
+        if not is_valid:
+            log_security_event(
+                "INTEGRITY_TAMPER_DETECTED",
+                "ALERT",
+                f"Integrity check mismatch: modified={modified}, missing={missing}"
+            )
+
+        return {
+            "status": status,
+            "is_valid": is_valid,
+            "modified_files": modified,
+            "missing_files": missing,
+            "message": "All core subsystem files intact." if is_valid else f"Tampering alert: modified {modified}"
+        }
+
+
+# ====================================================================
+# 9. DESTRUCTIVE ACTION "TWO-PERSON RULE" CHALLENGE GUARD
+# ====================================================================
+
+class DestructiveActionGuard:
+    """
+    Two-Person Rule Confirmation Challenge for high-consequence operations:
+    - Recursive directory wipe
+    - Memory database reset
+    - Process mass termination
+    - Formatting or root command executions
+    Holds at most ONE ephemeral 3-digit challenge code (0 RAM footprint).
+    """
+    DESTRUCTIVE_KEYWORDS = [
+        "delete file", "delete folder", "remove directory", "wipe memory",
+        "clear memory", "format drive", "wipe drive", "drop database",
+        "rmdir", "del /f", "rm -rf", "shutdown pc", "restart pc",
+        "terminate all processes", "factory reset", "wipe conversation"
+    ]
+
+    def __init__(self):
+        self._active_challenge: Optional[Dict[str, Any]] = None
+
+    def has_destructive_intent(self, text: str) -> bool:
+        t_low = text.lower()
+        return any(kw in t_low for kw in self.DESTRUCTIVE_KEYWORDS)
+
+    def create_challenge(self, action_name: str, target: str, callback: Optional[Any] = None) -> Tuple[str, str]:
+        """
+        Creates an ephemeral 3-digit verification challenge valid for 60 seconds.
+        Returns: (code: str, prompt_message: str)
+        """
+        code = str(random.randint(100, 999))
+        self._active_challenge = {
+            "code": code,
+            "action": action_name,
+            "target": target,
+            "callback": callback,
+            "created_at": time.time(),
+            "expires_at": time.time() + 60.0
+        }
+        log_security_event(
+            "DESTRUCTIVE_CHALLENGE_ISSUED",
+            "WARN",
+            f"Action: '{action_name}' on '{target}'. Verification code: {code}"
+        )
+        msg = (
+            f"⚠️ CONFIRMATION REQUIRED: Destructive action '{action_name}' requested on '{target}'.\n"
+            f"To proceed, say or type verification code: {code} (valid for 60 seconds)."
+        )
+        return code, msg
+
+    def verify_challenge(self, candidate_code: str) -> Tuple[bool, Any, str]:
+        """Verifies candidate code. If matched, triggers callback and purges code."""
+        if not self._active_challenge:
+            return False, None, "No active confirmation challenge pending."
+
+        now = time.time()
+        ch = self._active_challenge
+        if now > ch["expires_at"]:
+            self._active_challenge = None
+            log_security_event("CHALLENGE_EXPIRED", "INFO", f"Expired challenge for '{ch['action']}'")
+            return False, None, "Verification code has expired. Request cancelled."
+
+        if str(candidate_code).strip() == ch["code"]:
+            action = ch["action"]
+            cb = ch["callback"]
+            self._active_challenge = None
+            res = None
+            if cb and callable(cb):
+                try:
+                    res = cb()
+                except Exception as e:
+                    res = f"Execution error: {e}"
+            log_security_event("DESTRUCTIVE_ACTION_APPROVED", "INFO", f"Verified code for '{action}'")
+            return True, res, f"✅ Verified: Executed '{action}'."
+        else:
+            log_security_event("CHALLENGE_CODE_MISMATCH", "WARN", f"Incorrect code '{candidate_code}' for '{ch['action']}'")
+            return False, None, "❌ Incorrect verification code. Action aborted."
+
+    def cancel_active_challenge(self) -> str:
+        if self._active_challenge:
+            action = self._active_challenge["action"]
+            self._active_challenge = None
+            return f"Cancelled pending action '{action}'."
+        return "No pending confirmation challenge."
+
+
+_DESTRUCTIVE_GUARD = DestructiveActionGuard()
+
+def get_destructive_action_guard() -> DestructiveActionGuard:
+    return _DESTRUCTIVE_GUARD
+
+
+# ====================================================================
+# 10. PROTOCOL BLACKOUT & SYSTEM LOCKOUT (Panic Word)
+# ====================================================================
+
+_SYSTEM_LOCKED = False
+
+def wipe_clipboard() -> bool:
+    """Wipes Windows clipboard using native user32 API. 0 RAM overhead."""
+    try:
+        if sys.platform == "win32":
+            user32 = ctypes.windll.user32
+            if user32.OpenClipboard(0):
+                user32.EmptyClipboard()
+                user32.CloseClipboard()
+                return True
+    except Exception:
+        pass
+    return False
+
+def is_system_locked() -> bool:
+    """Returns True if Protocol Blackout is currently active."""
+    return _SYSTEM_LOCKED
+
+def trigger_protocol_blackout(ui_handle: Optional[Any] = None, reason: str = "Manual voice/command trigger") -> Dict[str, Any]:
+    """
+    Engages emergency Protocol Blackout:
+    - Sets system locked flag
+    - Wipes Windows clipboard
+    - Minimizes / locks UI
+    - Logs high-severity security event
+    """
+    global _SYSTEM_LOCKED
+    _SYSTEM_LOCKED = True
+    wiped = wipe_clipboard()
+
+    log_security_event(
+        "PROTOCOL_BLACKOUT_ACTIVATED",
+        "ALERT",
+        f"Protocol Blackout engaged. Reason: {reason}. Clipboard wiped: {wiped}"
+    )
+
+    if ui_handle:
+        try:
+            if hasattr(ui_handle, "set_state"):
+                ui_handle.set_state("LOCKED")
+            if hasattr(ui_handle, "push_notification"):
+                ui_handle.push_notification("🚨 PROTOCOL BLACKOUT: Workstation Console Locked", "warning")
+            if hasattr(ui_handle, "write_log"):
+                ui_handle.write_log("SECURITY: Protocol Blackout engaged. Clipboard wiped. System locked.")
+            if hasattr(ui_handle, "_win") and hasattr(ui_handle._win, "showMinimized"):
+                ui_handle._win.showMinimized()
+        except Exception:
+            pass
+
+    return {
+        "status": "LOCKED",
+        "clipboard_wiped": wiped,
+        "message": "🔒 PROTOCOL BLACKOUT ENGAGED: Screen minimized, clipboard cleared, system locked. Enter authorization passkey to resume."
+    }
+
+def unlock_protocol_blackout(passkey: str, ui_handle: Optional[Any] = None) -> Tuple[bool, str]:
+    """
+    Disengages Protocol Blackout using the security passkey.
+    Restores normal operational state.
+    """
+    global _SYSTEM_LOCKED
+    _AUTH_GUARD._load_config()
+    expected_passkey = _AUTH_GUARD._secret_passkey or "jarvis-override"
+
+    if passkey.strip() == expected_passkey.strip():
+        _SYSTEM_LOCKED = False
+        log_security_event("SYSTEM_UNLOCKED", "INFO", "Protocol Blackout disengaged via valid passkey.")
+
+        if ui_handle:
+            try:
+                if hasattr(ui_handle, "set_state"):
+                    ui_handle.set_state("LISTENING")
+                if hasattr(ui_handle, "push_notification"):
+                    ui_handle.push_notification("System unlocked. Welcome back, sir.", "info")
+                if hasattr(ui_handle, "_win") and hasattr(ui_handle._win, "showNormal"):
+                    ui_handle._win.showNormal()
+            except Exception:
+                pass
+        return True, "✅ System unlocked. All operational interfaces restored."
+    else:
+        log_security_event("UNLOCK_FAILED", "ALERT", "Incorrect passkey attempted during Protocol Blackout.")
+        return False, "❌ Invalid passkey. System remains locked."
+

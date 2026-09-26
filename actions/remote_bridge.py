@@ -24,7 +24,12 @@ from core.server_security import (
     authenticate_with_passkey,
     validate_safe_file_access,
     check_rate_limit,
-    log_security_event
+    log_security_event,
+    is_system_locked,
+    trigger_protocol_blackout,
+    unlock_protocol_blackout,
+    PromptInjectionShield,
+    get_destructive_action_guard
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -298,6 +303,42 @@ class TelegramRemoteBridge:
                         if not check_rate_limit(str(chat_id)):
                             self._send_reply(chat_id, "⚠️ RATE LIMIT EXCEEDED: Please pause before sending additional commands.")
                             continue
+
+                        # Check if System is in Protocol Blackout Lockout
+                        if is_system_locked():
+                            if text.startswith("/unlock ") or text.startswith("unlock "):
+                                pkey = text.split(" ", 1)[1].strip()
+                                ok, u_msg = unlock_protocol_blackout(pkey, ui_handle=self.player)
+                                self._send_reply(chat_id, u_msg)
+                                if ok:
+                                    self._send_startup_menu()
+                            else:
+                                self._send_reply(chat_id, "🔒 PROTOCOL BLACKOUT ACTIVE: System is locked. Send `/unlock <passkey>` to disengage.")
+                            continue
+
+                        # Check for Protocol Blackout Trigger
+                        if text.lower() in ("/blackout", "blackout", "/panic", "panic", "protocol blackout", "protocol zero", "clean slate"):
+                            b_res = trigger_protocol_blackout(ui_handle=self.player, reason=f"Remote Telegram command from chat ID {chat_id}")
+                            self._send_reply(chat_id, b_res["message"])
+                            continue
+
+                        # Check for 3-digit Destructive Challenge confirmation code
+                        if text.isdigit() and len(text) == 3:
+                            guard = get_destructive_action_guard()
+                            ok, res_action, ch_msg = guard.verify_challenge(text)
+                            if ok:
+                                self._send_reply(chat_id, f"✅ Verified: {ch_msg}\nResult: {res_action or 'Completed.'}")
+                                continue
+                            elif "No active confirmation" not in ch_msg:
+                                self._send_reply(chat_id, ch_msg)
+                                continue
+
+                        # Prompt Injection & Document Jailbreak Shield
+                        if text:
+                            is_safe, sanitized_text, matched = PromptInjectionShield.inspect(text, source=f"telegram_{chat_id}")
+                            if not is_safe:
+                                self._send_reply(chat_id, "🛡️ SECURITY SHIELD: Potential prompt injection / adversarial pattern detected. Content neutralized.")
+                                text = sanitized_text
 
                         # 1. Handle Voice Notes
                         if "voice" in msg or "audio" in msg:
