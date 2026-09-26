@@ -1125,10 +1125,13 @@ TOOL_DECLARATIONS = [
     {
         "name": "stunt_assistant",
         "description": (
-            "Accesses Akul's STUNT student tracker database directly. "
-            "Use this whenever Akul asks about college lectures, timetable schedule, upcoming classes, "
-            "logging attendance (e.g. 'attended Finance today', 'mark me present in Stats'), "
-            "checking if he can bunk a class, or getting a college daily briefing. "
+            "Complete desktop controller and database bridge for Akul's STUNT platform application on his laptop. "
+            "Use this for ANY request regarding STUNT: "
+            "1. App control: 'open STUNT', 'launch STUNT', 'close STUNT', 'bring STUNT to front', 'minimize STUNT'. "
+            "2. Tab switching: 'show timetable', 'show CGPA ledger', 'show syllabus', 'show tasks/pomodoro', 'show attendance', 'show finances'. "
+            "3. Academic actions: 'log attendance in Finance as Present', 'can I bunk Economics?', 'what classes do I have today?', 'next lecture'. "
+            "4. Task management: 'add task in STUNT: Case study due Friday', 'complete task', 'list my tasks'. "
+            "5. Productivity & Finance: 'start a 25-minute Pomodoro in STUNT', 'log expense of 400 rupees', 'check budget', 'get CGPA status', 'export STUNT transcript'. "
             "Talks like a proper friend and wingman — warm, witty, loyal, and keeps him on track."
         ),
         "parameters": {
@@ -1136,7 +1139,11 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "description": "get_schedule | get_next_class | log_attendance | bunk_check | attendance_status | college_briefing"
+                    "description": "launch_app | close_app | focus_app | switch_tab | log_attendance | bunk_check | get_schedule | get_next_class | add_task | complete_task | list_tasks | add_timetable_slot | start_pomodoro | log_expense | add_savings_goal | check_budget | get_cgpa | export_transcript | college_briefing"
+                },
+                "tab": {
+                    "type": "STRING",
+                    "description": "dashboard | cgpa | syllabus | tasks | pomodoro | attendance | finances | timetable | memories | milestones (for switch_tab)"
                 },
                 "subject": {
                     "type": "STRING",
@@ -1145,6 +1152,18 @@ TOOL_DECLARATIONS = [
                 "status": {
                     "type": "STRING",
                     "description": "Present | Absent | Cancelled (defaults to Present)"
+                },
+                "title": {
+                    "type": "STRING",
+                    "description": "Title for a new task or savings goal"
+                },
+                "amount": {
+                    "type": "NUMBER",
+                    "description": "Expense or savings target amount (e.g. 500, 15000)"
+                },
+                "day": {
+                    "type": "STRING",
+                    "description": "Day of week for timetable schedule (e.g. 'Monday', 'Tuesday')"
                 },
                 "date": {
                     "type": "STRING",
@@ -1196,22 +1215,25 @@ TOOL_DECLARATIONS = [
     {
         "name": "file_generator",
         "description": (
-            "Universal multi-format document authoring engine. "
-            "Use to CREATE or GENERATE ANY KIND OF FILE on demand: "
-            "Word documents (.docx), PowerPoint presentations (.pptx), PDF cheat sheets/reports (.pdf), "
-            "Excel spreadsheets (.xlsx), code (.py), or markdown (.md). "
-            "Files are saved directly to Desktop or Downloads and opened automatically."
+            "Executive document and multi-format authoring engine. "
+            "Generates files with executive styling on Desktop or Downloads and opens them immediately: "
+            "1. Word (.docx): Executive styling, callout boxes, code blocks, zebra-striped tables, running headers/footers. "
+            "2. PowerPoint (.pptx): 16:9 widescreen presentation decks, KPI callout slides, comparison cards, speaker notes. "
+            "3. PDF (.pdf): ReportLab NumberedCanvas (Page X of Y), wrapped tables, callout banners. "
+            "4. Excel (.xlsx): Formatted spreadsheets with automated formulas (SUM, AVERAGE), auto-sized columns, zebra shading. "
+            "5. Code / Markdown (.py, .md, .json, .csv, .html, .cpp, .sh). "
+            "6. Project / Codebase Documenter (project_doc): Scans any folder or repository and creates a complete architecture manual."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "file_type": {
                     "type": "STRING",
-                    "description": "docx | pptx | pdf | xlsx | code | markdown | text"
+                    "description": "docx | pptx | pdf | xlsx | code | markdown | project_doc"
                 },
                 "filename": {
                     "type": "STRING",
-                    "description": "Name of the file to create (e.g. 'Financial_Markets_Study_Guide', 'Finals_Revision_Presentation')"
+                    "description": "Name of the file to create (e.g. 'Executive_Strategy.docx', 'College_Deck.pptx', 'Study_Tracker.xlsx')"
                 },
                 "title": {
                     "type": "STRING",
@@ -1224,6 +1246,10 @@ TOOL_DECLARATIONS = [
                 "target_location": {
                     "type": "STRING",
                     "description": "desktop | downloads | documents (defaults to desktop)"
+                },
+                "project_path": {
+                    "type": "STRING",
+                    "description": "Path to local repository/codebase for project_doc (e.g. 'C:/Users/Akul/Desktop/STUNT')"
                 }
             },
             "required": ["file_type", "title", "content"]
@@ -1267,10 +1293,11 @@ TOOL_DECLARATIONS = [
     {
         "name": "deep_research",
         "description": (
-            "Deep multi-source academic and technical research engine. "
-            "Queries ArXiv scientific papers, Wikipedia, DuckDuckGo, and deep-scrapes full web pages. "
-            "Synthesizes comprehensive research briefs with theoretical frameworks, critical trade-offs, and academic citations. "
-            "Can export directly to a Word (.docx) or PDF document on Desktop."
+            "Autonomous multi-source academic and technical research engine. "
+            "Autonomously searches OpenAlex (250M+ peer-reviewed papers with citation metrics), CrossRef (official DOI articles), "
+            "ArXiv (AI, CS, Math, Physics preprints), Wikipedia (foundational taxonomies), and DuckDuckGo with deep body scraping. "
+            "Synthesizes publication-grade research dossiers with theoretical frameworks, comparative matrices, and IEEE/APA bibliographies. "
+            "Can export directly to an executive Word (.docx) or PDF document on Desktop and auto-open it."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1285,7 +1312,7 @@ TOOL_DECLARATIONS = [
                 },
                 "export_to": {
                     "type": "STRING",
-                    "description": "none | docx | pdf"
+                    "description": "none | docx | pdf | word"
                 }
             },
             "required": ["query"]
