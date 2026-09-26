@@ -154,6 +154,7 @@ def discover_college_files() -> List[Path]:
     """Scans Desktop, Downloads, Documents, and STUNT for college materials."""
     candidates = []
     scan_dirs = [
+        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT"),
         Path(r"C:\Users\Akul\Desktop\STUNT"),
         Path.home() / "OneDrive" / "Desktop",
         Path.home() / "Desktop",

@@ -24,12 +24,12 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 STUNT_CANDIDATE_DIRS = [
-    Path(r"C:\Users\Akul\Desktop\STUNT"),
     Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT"),
+    Path(r"C:\Users\Akul\Desktop\STUNT"),
 ]
 
 def get_stunt_paths():
-    """Finds the existing STUNT directory and database path."""
+    """Finds the active live STUNT directory and database path."""
     resolved_dir = None
     for d in STUNT_CANDIDATE_DIRS:
         if d.exists():
@@ -38,11 +38,12 @@ def get_stunt_paths():
     if not resolved_dir:
         resolved_dir = STUNT_CANDIDATE_DIRS[0]
 
+    # Prioritize the active, live database (_internal where STUNT.exe runs from)
     db_candidates = [
-        resolved_dir / "stunt_database.db",
-        Path(r"C:\Users\Akul\Desktop\STUNT\stunt_database.db"),
-        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\stunt_database.db"),
         Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\_internal\stunt_database.db"),
+        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\stunt_database.db"),
+        Path(r"C:\Users\Akul\Desktop\STUNT\stunt_database.db"),
+        resolved_dir / "stunt_database.db",
     ]
     resolved_db = None
     for db_c in db_candidates:
@@ -50,17 +51,19 @@ def get_stunt_paths():
             resolved_db = db_c
             break
     if not resolved_db:
-        resolved_db = resolved_dir / "stunt_database.db"
+        resolved_db = Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\_internal\stunt_database.db")
 
     return resolved_dir, resolved_db
 
 
 def sync_secondary_dbs(primary_db: Path):
-    """Syncs the updated database to all secondary copies on the laptop."""
-    for cand in [
-        Path(r"C:\Users\Akul\Desktop\STUNT\stunt_database.db"),
+    """Syncs the updated database to all STUNT copies across Desktop and OneDrive."""
+    all_targets = [
+        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\_internal\stunt_database.db"),
         Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\stunt_database.db"),
-    ]:
+        Path(r"C:\Users\Akul\Desktop\STUNT\stunt_database.db"),
+    ]
+    for cand in all_targets:
         if cand != primary_db and cand.parent.exists():
             try:
                 shutil.copy2(str(primary_db), str(cand))
@@ -164,28 +167,40 @@ def focus_stunt_window() -> bool:
 
 
 def launch_stunt_app() -> str:
-    """Launches the STUNT application on Akul's laptop."""
+    """Launches the new live STUNT application on Akul's laptop."""
     stunt_dir, _ = get_stunt_paths()
 
     if is_stunt_running():
         focus_stunt_window()
         return "STUNT Platform is already active, bro! Brought it right to your front screen."
 
-    # Look for launcher, pythonw, or exe
-    exe_path = stunt_dir / "dist" / "STUNT.exe"
-    launcher_bat = stunt_dir / "STUNT_Launcher.bat"
-    main_py = stunt_dir / "main.py"
+    # Look for new compiled executable, Desktop shortcut target, or launcher
+    candidates = [
+        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT\STUNT.exe"),
+        Path(r"C:\Users\Akul\OneDrive\Desktop\STUNT.exe"),
+        Path(r"C:\Users\Akul\Desktop\STUNT\dist\STUNT.exe"),
+        Path(r"C:\Users\Akul\Desktop\STUNT\STUNT_Launcher.bat"),
+        Path(r"C:\Users\Akul\Desktop\STUNT\main.py"),
+    ]
+
+    target_exe = None
+    target_cwd = None
+    for cand in candidates:
+        if cand.exists():
+            target_exe = cand
+            target_cwd = cand.parent
+            break
+
+    if not target_exe:
+        return f"Couldn't locate the new STUNT executable in {stunt_dir}, bro!"
 
     try:
-        if exe_path.exists():
-            subprocess.Popen([str(exe_path)], cwd=str(stunt_dir), creationflags=subprocess.DETACHED_PROCESS)
-        elif launcher_bat.exists():
-            subprocess.Popen(["cmd.exe", "/c", str(launcher_bat)], cwd=str(stunt_dir), creationflags=subprocess.DETACHED_PROCESS)
-        elif main_py.exists():
-            # Use system python or pythonw
-            subprocess.Popen(["pythonw", "main.py"], cwd=str(stunt_dir), creationflags=subprocess.DETACHED_PROCESS)
+        if target_exe.suffix.lower() == ".exe":
+            subprocess.Popen([str(target_exe)], cwd=str(target_cwd), creationflags=subprocess.DETACHED_PROCESS)
+        elif target_exe.suffix.lower() == ".bat":
+            subprocess.Popen(["cmd.exe", "/c", str(target_exe)], cwd=str(target_cwd), creationflags=subprocess.DETACHED_PROCESS)
         else:
-            return f"Couldn't locate STUNT executable in {stunt_dir}, bro!"
+            subprocess.Popen(["pythonw", "main.py"], cwd=str(target_cwd), creationflags=subprocess.DETACHED_PROCESS)
 
         time.sleep(1.5)
         focus_stunt_window()
