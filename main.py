@@ -93,6 +93,7 @@ from actions.file_generator import universal_file_creator
 from actions.exam_companion import exam_companion
 from actions.deep_research import deep_research
 from actions.college_hub import college_hub
+from actions.presentation_designer import presentation_designer
 from memory.conversation_log   import log_exchange
 
 
@@ -1340,6 +1341,65 @@ TOOL_DECLARATIONS = [
             "required": ["action"]
         }
     },
+    {
+        "name": "presentation_designer",
+        "description": (
+            "Autonomous Executive Presentation Designer Engine. "
+            "Gives JARVIS full creative and structural freedom to research, storyboard, design, and present "
+            "intriguing 16:9 widescreen PowerPoint decks (.pptx) with bespoke aesthetic themes, dynamic card layouts, "
+            "KPI metric grids, comparative dichotomy splits, process roadmaps, and embedded speaker notes. "
+            "Actions: "
+            "1. 'create': Autonomously researches and crafts an intriguing deck with themes (cyberpunk_stark, executive_obsidian, silicon_minimalist, emerald_science, solar_amber), opens in PowerPoint. "
+            "2. 'plan': Generates a slide-by-slide storyboard and narrative arc before building. "
+            "3. 'slideshow': Launches full-screen PowerPoint SlideShow mode instantly on voice command. "
+            "4. 'export_pdf': Directly converts presentation into flawless 16:9 PDF via PowerPoint COM. "
+            "5. 'speaker_script': Compiles an executive speech delivery guide (.md) with presenter talking points for every slide. "
+            "6. 'retheme': Applies a new aesthetic color palette to an existing presentation deck. "
+            "7. 'list_themes': Lists all available presentation styling themes."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "create | plan | slideshow | export_pdf | speaker_script | retheme | list_themes"
+                },
+                "topic": {
+                    "type": "STRING",
+                    "description": "Subject, topic, or thesis for the presentation (e.g. 'Autonomous Multi-Agent AI Systems in 2026', 'Supply Chain Finance', 'Pitch Deck')"
+                },
+                "theme": {
+                    "type": "STRING",
+                    "description": "cyberpunk_stark | executive_obsidian | silicon_minimalist | emerald_science | solar_amber"
+                },
+                "num_slides": {
+                    "type": "INTEGER",
+                    "description": "Number of slides to generate (default 7)"
+                },
+                "audience": {
+                    "type": "STRING",
+                    "description": "Target audience (e.g. 'Executive Leadership', 'College Class', 'Venture Capital Investors')"
+                },
+                "source_content": {
+                    "type": "STRING",
+                    "description": "Optional notes, document excerpts, research findings, or syllabus details to synthesize into the deck"
+                },
+                "target_location": {
+                    "type": "STRING",
+                    "description": "desktop | downloads | documents (defaults to desktop)"
+                },
+                "filename": {
+                    "type": "STRING",
+                    "description": "Custom filename (e.g. 'NextGen_AI_Keynote.pptx')"
+                },
+                "file_path": {
+                    "type": "STRING",
+                    "description": "Path to existing presentation for slideshow, PDF conversion, or speaker script extraction"
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 
@@ -1771,6 +1831,10 @@ class JarvisLive:
             elif name == "college_hub":
                 r = await loop.run_in_executor(None, lambda: college_hub(parameters=args, player=self.ui))
                 result = r or "College hub intelligence executed."
+
+            elif name == "presentation_designer":
+                r = await loop.run_in_executor(None, lambda: presentation_designer(parameters=args, player=self.ui))
+                result = r or "Presentation designer operation executed."
 
             elif name == "voice_macros":
                 r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))

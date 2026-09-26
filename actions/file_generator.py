@@ -889,6 +889,24 @@ def universal_file_creator(parameters: dict, player=None) -> str:
 
     # 3. PowerPoint Presentation
     elif ftype in ("pptx", "powerpoint", "presentation", "slides"):
+        try:
+            from actions.presentation_designer import create_intriguing_presentation
+            theme = params.get("theme", "cyberpunk_stark")
+            slides_data = params.get("slides")
+            res = create_intriguing_presentation(
+                topic=title,
+                theme=theme,
+                target_location=loc,
+                open_after=open_after,
+                source_content=content,
+                custom_slides=slides_data,
+                filename=fname
+            )
+            if res.get("status") == "success":
+                return f"Executive 16:9 Presentation generated successfully: {res.get('file_path')} [Theme: {res.get('theme_name')}, Slides: {res.get('slide_count')}]"
+        except Exception as e:
+            pass
+
         slides_data = params.get("slides")
         if not slides_data:
             slides_data = []
