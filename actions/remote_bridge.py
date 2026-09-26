@@ -19,6 +19,13 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from google import genai
+from core.server_security import (
+    is_remote_client_authorized,
+    authenticate_with_passkey,
+    validate_safe_file_access,
+    check_rate_limit,
+    log_security_event
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -252,6 +259,15 @@ class TelegramRemoteBridge:
                             except Exception:
                                 pass
 
+                            if chat_id and not is_remote_client_authorized(chat_id):
+                                log_security_event("UNAUTHORIZED_CALLBACK_BLOCKED", "WARN", f"Blocked unauthorized button callback from chat ID {chat_id}", client_id=str(chat_id))
+                                self._send_reply(chat_id, "⛔ ACCESS RESTRICTED: Device is not authorized.")
+                                continue
+
+                            if chat_id and not check_rate_limit(str(chat_id)):
+                                self._send_reply(chat_id, "⚠️ RATE LIMIT: Please pause.")
+                                continue
+
                             if chat_id and cb_data:
                                 self._handle_remote_command(chat_id, cb_data)
                             continue
@@ -262,8 +278,26 @@ class TelegramRemoteBridge:
                         if not chat_id:
                             continue
 
-                        # Update telegram_chat_id in config
-                        self._save_chat_id(chat_id)
+                        text = msg.get("text", "").strip()
+
+                        # Security Shield: Enforce Authorization & Pairing Passkey
+                        if not is_remote_client_authorized(chat_id):
+                            if text.startswith("/auth ") or text.startswith("auth "):
+                                passkey = text.split(" ", 1)[1].strip()
+                                if authenticate_with_passkey(chat_id, passkey):
+                                    self._send_reply(chat_id, "✅ IDENTITY VERIFIED: Device authenticated and added to J.A.R.V.I.S. security whitelist.")
+                                    self._send_startup_menu()
+                                else:
+                                    self._send_reply(chat_id, "❌ AUTHENTICATION FAILED: Invalid passkey. Event logged to security audit.")
+                            else:
+                                log_security_event("UNAUTHORIZED_ACCESS_BLOCKED", "WARN", f"Blocked unauthorized message from chat ID {chat_id}: '{text[:30]}'", client_id=str(chat_id))
+                                self._send_reply(chat_id, f"⛔ ACCESS RESTRICTED: J.A.R.V.I.S. is locked to authorized users. If you are the owner, send `/auth <passkey>` to pair this device.")
+                            continue
+
+                        # Rate limit check
+                        if not check_rate_limit(str(chat_id)):
+                            self._send_reply(chat_id, "⚠️ RATE LIMIT EXCEEDED: Please pause before sending additional commands.")
+                            continue
 
                         # 1. Handle Voice Notes
                         if "voice" in msg or "audio" in msg:
@@ -284,7 +318,6 @@ class TelegramRemoteBridge:
                             continue
 
                         # 4. Handle Text Commands & Chat
-                        text = msg.get("text", "").strip()
                         if text:
                             self._handle_remote_command(chat_id, text)
             except Exception as e:
@@ -456,15 +489,12 @@ class TelegramRemoteBridge:
         # 📁 File Fetcher (/get <filepath>)
         elif cmd_low.startswith("/get ") or cmd_low.startswith("get "):
             target_str = cmd.split(" ", 1)[1].strip()
-            target_path = Path(target_str).expanduser()
-
-            # Handle relative shortcuts
-            if not target_path.exists():
-                target_path = BASE_DIR / target_str
-
-            if target_path.exists() and target_path.is_file():
-                self._send_document(chat_id, target_path)
-                _audit_log(f"Sent file '{target_path.name}' to Telegram.")
+            is_safe, canonical_p, reason = validate_safe_file_access(target_str)
+            if not is_safe:
+                self._send_reply(chat_id, f"🛡️ SECURITY SHIELD: {reason}")
+            elif canonical_p and canonical_p.is_file():
+                self._send_document(chat_id, canonical_p)
+                _audit_log(f"Sent file '{canonical_p.name}' to Telegram.")
             else:
                 self._send_reply(chat_id, f"File not found: '{target_str}'")
 

@@ -2525,6 +2525,198 @@ class MainWindow(QMainWindow):
         self.update()
 
 
+class JarvisOpeningScreen(QWidget):
+    """
+    Sleek, low-energy Stark Industries boot splash for J.A.R.V.I.S. Mark 58.
+    Features:
+    - OLED-black canvas (#040914) saving power on OLED/LED displays.
+    - Concentric rotating Arc Reactor glow with tech segments.
+    - Battery-aware auto-tuning (Eco-Boot Mode: lower tick rate on battery).
+    - Sequential subsystem initialization telemetry.
+    - Auto-dismisses smoothly into MainWindow and tears down all timers.
+    - Keyboard/mouse dismiss override (Space, Enter, Escape, or Click to skip).
+    """
+    def __init__(self, on_complete=None, parent=None):
+        super().__init__(parent)
+        self.on_complete = on_complete
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        self._w, self._h = 680, 420
+        self.resize(self._w, self._h)
+
+        # Center on primary screen
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.move(
+            (screen.width() - self._w) // 2,
+            (screen.height() - self._h) // 2
+        )
+
+        # Power / Battery Telemetry Check
+        self._on_battery = False
+        self._battery_text = "⚡ AC POWER CONNECTED • PERFORMANCE PROFILE: OPTIMAL"
+        try:
+            bat = psutil.sensors_battery()
+            if bat:
+                self._on_battery = not bat.power_plugged
+                plug_str = "PLUGGED IN" if bat.power_plugged else "ON BATTERY"
+                eco_str = "ECO POWER ACTIVE" if self._on_battery else "OPTIMAL"
+                self._battery_text = f"⚡ {bat.percent}% [{plug_str}] • ECO POWER PROFILE: {eco_str}"
+        except Exception:
+            pass
+
+        # Energy-aware timing:
+        # On battery: 20 FPS (50ms interval), 30 steps total (~1.5s total duration)
+        # On AC: 28 FPS (35ms interval), 50 steps total (~1.75s total duration)
+        self._step_interval = 50 if self._on_battery else 35
+        self._max_steps = 30 if self._on_battery else 50
+        self._current_step = 0
+        self._angle = 0.0
+
+        self._subsystems = [
+            (0.15, "[✔] NEURAL ENGINE: GEMINI 2.0 / 3.8 FLASH READY"),
+            (0.40, "[✔] STUNT DESKTOP PLATFORM MESH: CONNECTED"),
+            (0.65, "[✔] 16:9 PRESENTATION STUDIO & EXECUTIVE DOCS: LOADED"),
+            (0.85, "[✔] LOCALHOST THREAT SHIELD & SECURITY GOVERNOR: ACTIVE"),
+        ]
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+        self._timer.start(self._step_interval)
+
+    def _on_tick(self):
+        self._current_step += 1
+        self._angle = (self._angle + 4.5) % 360.0
+        self.update()
+
+        if self._current_step >= self._max_steps:
+            self._timer.stop()
+            self._finish()
+
+    def _finish(self):
+        if hasattr(self, "_timer") and self._timer.isActive():
+            self._timer.stop()
+        if self.on_complete:
+            cb = self.on_complete
+            self.on_complete = None
+            cb()
+        self.close()
+
+    def mousePressEvent(self, event):
+        self._finish()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
+            self._finish()
+        else:
+            super().keyPressEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # 1. Base Dark Card
+        card_rect = QRectF(10, 10, self._w - 20, self._h - 20)
+        p.setPen(QPen(QColor(C.BORDER), 1.5))
+        p.setBrush(QBrush(QColor("#040b14")))
+        p.drawRoundedRect(card_rect, 16.0, 16.0)
+
+        # Subtle Radial Glow behind Arc Reactor
+        cx, cy = self._w / 2.0, 125.0
+        glow = QRadialGradient(cx, cy, 110)
+        glow.setColorAt(0.0, QColor(0, 240, 255, 38 if not self._on_battery else 20))
+        glow.setColorAt(0.7, QColor(0, 136, 179, 12 if not self._on_battery else 6))
+        glow.setColorAt(1.0, QColor(4, 11, 20, 0))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(glow))
+        p.drawEllipse(QPointF(cx, cy), 110, 110)
+
+        # 2. Concentric Arc Reactor Geometry
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(self._angle)
+
+        # Outer Segmented Ring
+        p.setPen(QPen(QColor(C.PRI), 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(0, 0), 48, 48)
+
+        # 8 Radial Notches
+        p.setPen(QPen(QColor(C.PRI_DIM), 1.5))
+        for i in range(8):
+            rad = i * (math.pi / 4.0)
+            x1, y1 = 40.0 * math.cos(rad), 40.0 * math.sin(rad)
+            x2, y2 = 48.0 * math.cos(rad), 48.0 * math.sin(rad)
+            p.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+        # Counter-rotating Inner Ring
+        p.rotate(-self._angle * 2.2)
+        p.setPen(QPen(QColor(C.BORDER_A), 1.2, Qt.PenStyle.DashLine))
+        p.drawEllipse(QPointF(0, 0), 32, 32)
+        p.restore()
+
+        # Inner Glowing Core
+        core_grad = QRadialGradient(cx, cy, 20)
+        core_grad.setColorAt(0.0, QColor("#ffffff"))
+        core_grad.setColorAt(0.5, QColor(C.PRI))
+        core_grad.setColorAt(1.0, QColor(C.PRI_GHO))
+        p.setPen(QPen(QColor(C.PRI), 1.0))
+        p.setBrush(QBrush(core_grad))
+        p.drawEllipse(QPointF(cx, cy), 16, 16)
+
+        # 3. Branding Typography
+        p.setPen(QColor(C.WHITE))
+        font_title = QFont("Segoe UI", 18, QFont.Weight.Bold)
+        p.setFont(font_title)
+        p.drawText(QRectF(20, 195, self._w - 40, 32), Qt.AlignmentFlag.AlignCenter, "J.A.R.V.I.S.   •   MARK 58")
+
+        font_sub = QFont("Segoe UI", 9, QFont.Weight.DemiBold)
+        p.setFont(font_sub)
+        p.setPen(QColor(C.PRI))
+        p.drawText(QRectF(20, 226, self._w - 40, 20), Qt.AlignmentFlag.AlignCenter, "STARK INDUSTRIES AUTONOMOUS EXECUTIVE OS")
+
+        # Battery / Eco-Status
+        font_eco = QFont("Segoe UI", 8)
+        p.setFont(font_eco)
+        p.setPen(QColor(C.GREEN if not self._on_battery else C.ACC2))
+        p.drawText(QRectF(20, 248, self._w - 40, 18), Qt.AlignmentFlag.AlignCenter, self._battery_text)
+
+        # 4. Subsystems Boot Sequence Checklist
+        progress_ratio = min(1.0, self._current_step / float(self._max_steps))
+        font_sys = QFont("Segoe UI", 8, QFont.Weight.Bold)
+        p.setFont(font_sys)
+
+        start_y = 276
+        for thresh, label in self._subsystems:
+            if progress_ratio >= thresh:
+                p.setPen(QColor(C.TEXT_MED))
+                p.drawText(QRectF(80, start_y, self._w - 160, 18), Qt.AlignmentFlag.AlignLeft, label)
+            else:
+                p.setPen(QColor(C.TEXT_DIM))
+                p.drawText(QRectF(80, start_y, self._w - 160, 18), Qt.AlignmentFlag.AlignLeft, f"[ ] {label[4:]}")
+            start_y += 18
+
+        # 5. Energy-Efficient Progress Bar
+        bar_x, bar_y, bar_w, bar_h = 80, 362, self._w - 160, 6
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(QColor("#0d2038")))
+        p.drawRoundedRect(QRectF(bar_x, bar_y, bar_w, bar_h), 3, 3)
+
+        fill_w = bar_w * progress_ratio
+        if fill_w > 0:
+            fill_grad = QLinearGradient(bar_x, bar_y, bar_x + fill_w, bar_y)
+            fill_grad.setColorAt(0.0, QColor(C.PRI_DIM))
+            fill_grad.setColorAt(1.0, QColor(C.PRI))
+            p.setBrush(QBrush(fill_grad))
+            p.drawRoundedRect(QRectF(bar_x, bar_y, fill_w, bar_h), 3, 3)
+
+        # 6. Skip Instruction Hint
+        font_hint = QFont("Segoe UI", 7)
+        p.setFont(font_hint)
+        p.setPen(QColor(C.TEXT_DIM))
+        p.drawText(QRectF(20, 378, self._w - 40, 16), Qt.AlignmentFlag.AlignCenter, "Press Space, Enter, or Click to Engage Console immediately")
+
+
 class _RootShim:
     def __init__(self, app: QApplication):
         self._app = app
@@ -2535,12 +2727,17 @@ class _RootShim:
 
 
 class JarvisUI:
-    def __init__(self, face_path: str, size=None):
+    def __init__(self, face_path: str, size=None, show_splash: bool = True):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
         self._win = MainWindow(face_path)
-        self._win.show()
         self.root = _RootShim(self._app)
+
+        if show_splash:
+            self._splash = JarvisOpeningScreen(on_complete=self._win.show)
+            self._splash.show()
+        else:
+            self._win.show()
 
     def set_war_theme(self, enabled: bool):
         self._win.set_war_theme(enabled)
