@@ -24,5 +24,8 @@ pyaudio
 chromadb
 pyttsx3
 SpeechRecognition
-pyPDF2
+pypdf
 python-docx
+python-pptx
+openpyxl
+reportlab

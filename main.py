@@ -88,6 +88,11 @@ from core.human_reactions import (
 from core.hardware_equilibrium import (
     get_hardware_equilibrium_governor, handle_hardware_equilibrium_tool
 )
+from core.long_conversation import get_long_conversation_manager
+from actions.file_generator import universal_file_creator
+from actions.exam_companion import exam_companion
+from actions.deep_research import deep_research
+from actions.college_hub import college_hub
 from memory.conversation_log   import log_exchange
 
 
@@ -1188,6 +1193,126 @@ TOOL_DECLARATIONS = [
             "required": ["action"]
         }
     },
+    {
+        "name": "file_generator",
+        "description": (
+            "Universal multi-format document authoring engine. "
+            "Use to CREATE or GENERATE ANY KIND OF FILE on demand: "
+            "Word documents (.docx), PowerPoint presentations (.pptx), PDF cheat sheets/reports (.pdf), "
+            "Excel spreadsheets (.xlsx), code (.py), or markdown (.md). "
+            "Files are saved directly to Desktop or Downloads and opened automatically."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file_type": {
+                    "type": "STRING",
+                    "description": "docx | pptx | pdf | xlsx | code | markdown | text"
+                },
+                "filename": {
+                    "type": "STRING",
+                    "description": "Name of the file to create (e.g. 'Financial_Markets_Study_Guide', 'Finals_Revision_Presentation')"
+                },
+                "title": {
+                    "type": "STRING",
+                    "description": "Document or Presentation main title"
+                },
+                "content": {
+                    "type": "STRING",
+                    "description": "Full document content, outline, markdown headings, or presentation bullet points"
+                },
+                "target_location": {
+                    "type": "STRING",
+                    "description": "desktop | downloads | documents (defaults to desktop)"
+                }
+            },
+            "required": ["file_type", "title", "content"]
+        }
+    },
+    {
+        "name": "exam_companion",
+        "description": (
+            "Academic exam companion, tutor, and document intelligence engine. "
+            "Use when Akul wants to study, prepare for exams, break down uploaded notes/syllabus, "
+            "get a concept explained simply (Feynman) or with mathematical rigor, solve exam questions or derivations, "
+            "take an interactive mock quiz, or generate an exam revision schedule or cheat sheet."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "explain | analyze_document | quiz_me | solve_question | study_plan | create_cheat_sheet"
+                },
+                "topic": {
+                    "type": "STRING",
+                    "description": "Academic subject, concept name, or question to solve (e.g. 'Capital Asset Pricing Model', 'Black-Scholes formula')"
+                },
+                "file_path": {
+                    "type": "STRING",
+                    "description": "Optional path to uploaded lecture notes, textbook, or test paper (PDF, Word, PPTX, image)"
+                },
+                "mode": {
+                    "type": "STRING",
+                    "description": "feynman (simple intuitive analogies) | deep (mathematical rigor) | cram (rapid high-yield exam bullet points)"
+                },
+                "export_to": {
+                    "type": "STRING",
+                    "description": "none | docx | pdf | pptx (automatically exports revision sheet to desktop)"
+                }
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "deep_research",
+        "description": (
+            "Deep multi-source academic and technical research engine. "
+            "Queries ArXiv scientific papers, Wikipedia, DuckDuckGo, and deep-scrapes full web pages. "
+            "Synthesizes comprehensive research briefs with theoretical frameworks, critical trade-offs, and academic citations. "
+            "Can export directly to a Word (.docx) or PDF document on Desktop."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "Academic research query or technical question to investigate deeply"
+                },
+                "focus": {
+                    "type": "STRING",
+                    "description": "academic | technical | market | general"
+                },
+                "export_to": {
+                    "type": "STRING",
+                    "description": "none | docx | pdf"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "college_hub",
+        "description": (
+            "Unified College Data & Knowledge Mesh connecting Outlook emails, lecture slides, assignments, and STUNT student database. "
+            "Use to check college announcements, professor notices, download lecture attachments, search across all college notes, "
+            "or get an all-in-one college briefing (timetable, attendance, pending tasks, recent emails)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "overview | sync_emails | list_materials | search | ask"
+                },
+                "query": {
+                    "type": "STRING",
+                    "description": "Search phrase or question across college data (e.g. 'exam schedule', 'Macroeconomics presentation', 'finance assignment')"
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 
@@ -1325,6 +1450,11 @@ class JarvisLive:
             parts.append(settings_ctx)
         if mem_str:
             parts.append(mem_str)
+        
+        long_conv_ctx = get_long_conversation_manager().get_conversation_context()
+        if long_conv_ctx:
+            parts.append(long_conv_ctx)
+
         parts.append(sys_prompt)
 
         return types.LiveConnectConfig(
@@ -1599,6 +1729,22 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: handle_hardware_equilibrium_tool(args, player=self.ui))
                 result = r or "Hardware equilibrium managed."
 
+            elif name == "file_generator":
+                r = await loop.run_in_executor(None, lambda: universal_file_creator(parameters=args, player=self.ui))
+                result = r or "File generated successfully."
+
+            elif name == "exam_companion":
+                r = await loop.run_in_executor(None, lambda: exam_companion(parameters=args, player=self.ui))
+                result = r or "Academic exam companion task executed."
+
+            elif name == "deep_research":
+                r = await loop.run_in_executor(None, lambda: deep_research(parameters=args, player=self.ui))
+                result = r or "Deep research report compiled."
+
+            elif name == "college_hub":
+                r = await loop.run_in_executor(None, lambda: college_hub(parameters=args, player=self.ui))
+                result = r or "College hub intelligence executed."
+
             elif name == "voice_macros":
                 r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))
                 result = r or "Voice macro executed."
@@ -1815,6 +1961,11 @@ class JarvisLive:
                             if full_out:
                                 self.ui.write_log(f"Jarvis: {full_out}")
                             out_buf = []
+
+                            try:
+                                get_long_conversation_manager().record_turn(full_in, full_out)
+                            except Exception:
+                                pass
 
                             if full_in and len(full_in) > 5:
                                 threading.Thread(
