@@ -78,4 +78,4 @@ The user retains complete administrative sovereignty over all information stored
 For operational adjustments, permission modifications, or security inquiries regarding this framework:
 - **System Principal:** Akul Bhatnagar
 - **Workstation:** Private Executive Workstation (Windows 11)
-- **Repository:** `Jarvis-Mark-XL` (Apex Mark 58 Core)
+- **Repository:** `JARVIS-MARK-LVIII` (Mark 58 / Mark LVIII Apex Core)
