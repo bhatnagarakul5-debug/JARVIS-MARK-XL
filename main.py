@@ -100,6 +100,7 @@ from core.server_security import (
     unlock_protocol_blackout, PromptInjectionShield,
     get_destructive_action_guard
 )
+from actions.anti_shoulder_surfer import anti_shoulder_surfer_tool, get_anti_shoulder_surfer
 
 
 def get_base_dir():
@@ -1405,6 +1406,25 @@ TOOL_DECLARATIONS = [
             "required": ["action"]
         }
     },
+    {
+        "name": "anti_shoulder_surfer",
+        "description": (
+            "Controls the Sentry Vision Privacy Shield & Anti-Shoulder Surfer. "
+            "Periodically checks webcam in public spaces to detect onlookers peering at the user's screen. "
+            "If an onlooker or unrecognized presence is detected behind the workstation, it engages a privacy veil "
+            "over the desktop interface and blurs sensitive academic, email, and conversation cards until the perimeter is clear."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "enable | disable | dismiss | status"
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 
@@ -1460,6 +1480,24 @@ class JarvisLive:
         if any(kw in cmd_low for kw in ["protocol blackout", "protocol zero", "blackout protocol", "clean slate protocol"]):
             res = trigger_protocol_blackout(ui_handle=self.ui, reason="Local console trigger")
             self.speak("Protocol Blackout engaged. Clipboard cleared, security shield locked.")
+            return
+
+        # 2b. Check for Anti-Shoulder Surfer Commands
+        if any(kw in cmd_low for kw in ["enable anti-shoulder surfer", "activate anti-shoulder surfer", "start anti-shoulder surfer", "turn on anti-shoulder surfer", "enable privacy veil"]):
+            res = get_anti_shoulder_surfer().start_sentry(player=self.ui, speak=self.speak)
+            self.ui.push_notification(res, "info")
+            self.speak(res)
+            return
+
+        if any(kw in cmd_low for kw in ["disable anti-shoulder surfer", "deactivate anti-shoulder surfer", "stop anti-shoulder surfer", "turn off anti-shoulder surfer", "disable privacy veil"]):
+            res = get_anti_shoulder_surfer().stop_sentry(player=self.ui)
+            self.ui.push_notification(res, "info")
+            self.speak(res)
+            return
+
+        if any(kw in cmd_low for kw in ["dismiss privacy veil", "dismiss veil", "clear privacy veil", "clear veil"]):
+            res = get_anti_shoulder_surfer().dismiss_veil()
+            self.speak("Privacy veil dismissed, sir.")
             return
 
         # 3. Check for 3-Digit Destructive Confirmation Code
@@ -1894,6 +1932,13 @@ class JarvisLive:
             elif name == "presentation_designer":
                 r = await loop.run_in_executor(None, lambda: presentation_designer(parameters=args, player=self.ui))
                 result = r or "Presentation designer operation executed."
+
+            elif name == "anti_shoulder_surfer":
+                r = await loop.run_in_executor(
+                    None,
+                    lambda: anti_shoulder_surfer_tool(parameters=args, player=self.ui, speak=self.speak)
+                )
+                result = r or "Anti-Shoulder Surfer action complete."
 
             elif name == "voice_macros":
                 r = await loop.run_in_executor(None, lambda: execute_voice_macro(parameters=args, player=self.ui))

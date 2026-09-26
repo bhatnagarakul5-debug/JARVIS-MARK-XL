@@ -26,7 +26,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QTextEdit,
-    QVBoxLayout, QWidget, QProgressBar,
+    QVBoxLayout, QWidget, QProgressBar, QGraphicsBlurEffect,
 )
 
 def _base_dir() -> Path:
@@ -1639,6 +1639,103 @@ class HistoryOverlay(QWidget):
         self._load_entries(text.strip())
 
 
+class PrivacyVeilOverlay(QWidget):
+    """
+    Futuristic cyber-security privacy veil overlay for J.A.R.V.I.S.
+    Blurs and masks the underlying desktop interface when an onlooker
+    is detected looking over the user's shoulder.
+    """
+    dismissed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("""
+            PrivacyVeilOverlay {
+                background: rgba(4, 11, 20, 246);
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(40, 40, 40, 40)
+
+        card = QFrame()
+        card.setFixedSize(540, 320)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background: #061220;
+                border: 2px solid {C.RED};
+                border-radius: 12px;
+            }}
+        """)
+        c_lay = QVBoxLayout(card)
+        c_lay.setContentsMargins(30, 24, 30, 24)
+        c_lay.setSpacing(12)
+        c_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        badge = QLabel("🛡️  SENTRY PRIVACY VEIL ENGAGED")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        badge.setStyleSheet(f"color: {C.RED}; background: transparent; border: none;")
+        c_lay.addWidget(badge)
+
+        warn_lbl = QLabel("⚠️  UNRECOGNIZED PRESENCE DETECTED BEHIND WORKSTATION")
+        warn_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        warn_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        warn_lbl.setStyleSheet(f"color: {C.ACC2}; background: transparent; border: none;")
+        c_lay.addWidget(warn_lbl)
+
+        desc_lbl = QLabel(
+            "Anti-Shoulder Surfer has blurred your sensitive dashboard widgets, "
+            "academic documents, and conversation history to protect your privacy from onlookers."
+        )
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setFont(QFont("Segoe UI", 8))
+        desc_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        c_lay.addWidget(desc_lbl)
+
+        status_lbl = QLabel("👁️ Perimeter vision sentry active • Auto-restores when onlooker leaves")
+        status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        status_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent; border: none;")
+        c_lay.addWidget(status_lbl)
+
+        c_lay.addSpacing(6)
+
+        btn_dismiss = QPushButton("DISMISS VEIL  [ESC]")
+        btn_dismiss.setFixedHeight(34)
+        btn_dismiss.setFixedWidth(200)
+        btn_dismiss.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        btn_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_dismiss.setStyleSheet(f"""
+            QPushButton {{
+                background: #140409;
+                color: {C.RED};
+                border: 1px solid {C.RED};
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background: {C.RED};
+                color: #ffffff;
+            }}
+        """)
+        btn_dismiss.clicked.connect(self.dismissed.emit)
+        c_lay.addWidget(btn_dismiss, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(card)
+
+    def mousePressEvent(self, event):
+        self.dismissed.emit()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Space, Qt.Key.Key_Return):
+            self.dismissed.emit()
+        else:
+            super().keyPressEvent(event)
+
+
 class MainWindow(QMainWindow):
     _log_sig   = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
@@ -1648,6 +1745,7 @@ class MainWindow(QMainWindow):
     _emotion_sig = pyqtSignal(str, str)
     _gesture_sig = pyqtSignal(str)
     _fps_throttle_sig = pyqtSignal(int)
+    _privacy_veil_sig = pyqtSignal(bool, str)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -1714,6 +1812,10 @@ class MainWindow(QMainWindow):
         self._overlay: SetupOverlay | None = None
         self._settings_overlay: SettingsOverlay | None = None
         self._history_overlay: HistoryOverlay | None = None
+        self._privacy_veil: PrivacyVeilOverlay | None = None
+        self._blur_effect: QGraphicsBlurEffect | None = None
+        self._privacy_veil_sig.connect(self._on_set_privacy_veil)
+
         self._ready = self._check_config()
         self.ready_event = threading.Event()
         if self._ready:
@@ -1727,6 +1829,8 @@ class MainWindow(QMainWindow):
         sc_full.activated.connect(self._toggle_fullscreen)
         sc_cam = QShortcut(QKeySequence("F6"), self)
         sc_cam.activated.connect(self._toggle_camera)
+        sc_veil = QShortcut(QKeySequence("Escape"), self)
+        sc_veil.activated.connect(self._dismiss_privacy_veil)
 
     def write_log(self, text: str):
         self._log_sig.emit(text)
@@ -1774,6 +1878,44 @@ class MainWindow(QMainWindow):
         else:
             self.showFullScreen()
 
+    def set_privacy_veil(self, enabled: bool, reason: str = ""):
+        """Thread-safe trigger for Anti-Shoulder Surfer privacy veil."""
+        self._privacy_veil_sig.emit(enabled, reason)
+
+    def _dismiss_privacy_veil(self):
+        """Disengages privacy veil and alerts sentry engine."""
+        self._on_set_privacy_veil(False)
+        try:
+            from actions.anti_shoulder_surfer import get_anti_shoulder_surfer
+            get_anti_shoulder_surfer().dismiss_veil()
+        except Exception:
+            pass
+
+    def _on_set_privacy_veil(self, enabled: bool, reason: str = ""):
+        """Engages or disengages privacy veil overlay and blur effects."""
+        if enabled:
+            if not self._privacy_veil:
+                self._privacy_veil = PrivacyVeilOverlay(self)
+                self._privacy_veil.dismissed.connect(self._dismiss_privacy_veil)
+            self._privacy_veil.setGeometry(0, 0, self.width(), self.height())
+            self._privacy_veil.show()
+            self._privacy_veil.raise_()
+
+            if self.centralWidget():
+                self._blur_effect = QGraphicsBlurEffect(self)
+                self._blur_effect.setBlurRadius(22.0)
+                self.centralWidget().setGraphicsEffect(self._blur_effect)
+
+            self.write_log("PRIVACY: 🛡️ Sentry Privacy Veil engaged — shoulder surfer detected.")
+            self.push_notification("Sentry Privacy Veil active — screen obscured", "warning")
+        else:
+            if self._privacy_veil and self._privacy_veil.isVisible():
+                self._privacy_veil.hide()
+            if self.centralWidget():
+                self.centralWidget().setGraphicsEffect(None)
+            self.write_log("PRIVACY: Perimeter clear — Sentry Privacy Veil lifted.")
+            self.push_notification("Perimeter clear — Workspace restored", "info")
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         cw = self.centralWidget()
@@ -1787,6 +1929,8 @@ class MainWindow(QMainWindow):
             if self._history_overlay and self._history_overlay.isVisible():
                 ow, oh = 480, 520
                 self._history_overlay.setGeometry((cw.width() - ow) // 2, (cw.height() - oh) // 2, ow, oh)
+            if hasattr(self, "_privacy_veil") and self._privacy_veil and self._privacy_veil.isVisible():
+                self._privacy_veil.setGeometry(0, 0, self.width(), self.height())
 
     def closeEvent(self, event):
         try:
@@ -1800,6 +1944,9 @@ class MainWindow(QMainWindow):
             from actions.camera_system import camera_mgr
             if camera_mgr.is_active:
                 camera_mgr.stop()
+            from actions.anti_shoulder_surfer import get_anti_shoulder_surfer
+            if get_anti_shoulder_surfer().is_active():
+                get_anti_shoulder_surfer().stop_sentry()
         except Exception:
             pass
         super().closeEvent(event)
@@ -2808,4 +2955,12 @@ class JarvisUI:
 
     def stop_speaking(self):
         if not self.muted:
-            self.set_state("LISTENING")
+            self.set_state("LISTENING")
+
+    def set_privacy_veil(self, enabled: bool, reason: str = ""):
+        """Triggers or dismisses the Anti-Shoulder Surfer privacy veil."""
+        self._win.set_privacy_veil(enabled, reason)
+
+    def dismiss_privacy_veil(self):
+        """Manually dismisses the privacy veil."""
+        self._win._dismiss_privacy_veil()
